@@ -1,0 +1,25 @@
+{
+  "Material MD3": {
+    "name": "Material MD3",
+    "background": "#1C1B1F",
+    "foreground": "#E6E1E5",
+    "cursorColor": "#FF6D00",
+    "selectionBackground": "#4D2800",
+    "black": "#1C1B1F",
+    "brightBlack": "#49454F",
+    "red": "#CF6679",
+    "brightRed": "#E87B8C",
+    "green": "#69F0AE",
+    "brightGreen": "#85F3BC",
+    "yellow": "#FFD740",
+    "brightYellow": "#FFE57F",
+    "blue": "#82AAFF",
+    "brightBlue": "#A0BFFF",
+    "purple": "#BB86FC",
+    "brightPurple": "#CFA0FC",
+    "cyan": "#00BCD4",
+    "brightCyan": "#26C6DA",
+    "white": "#C4C0CB",
+    "brightWhite": "#E6E1E5"
+  }
+}
