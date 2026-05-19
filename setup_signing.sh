@@ -79,7 +79,7 @@ setup_ssh() {
     touch "$ALLOWED_SIGNERS_FILE"
     KEY_TYPE_AND_VAL=$(cat "${KEY_PATH}.pub")
     if ! grep -qF "$KEY_TYPE_AND_VAL" "$ALLOWED_SIGNERS_FILE" 2>/dev/null; then
-        echo "$GIT_EMAIL $KEY_TYPE_AND_VAL" >> "$ALLOWED_SIGNERS_FILE"
+        echo "* namespaces=\"git\" $KEY_TYPE_AND_VAL" >> "$ALLOWED_SIGNERS_FILE"
     fi
     git config --global gpg.ssh.allowedSignersFile "$ALLOWED_SIGNERS_FILE"
 
