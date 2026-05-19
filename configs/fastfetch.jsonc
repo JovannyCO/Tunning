@@ -22,7 +22,7 @@
   "modules": [
     {
       "type": "title",
-      "format": "[38;2;255;109;0m{user-name}[0m[38;2;105;240;174m@[0m[38;2;255;109;0m{host-name}[0m"
+      "format": "\u001b[38;2;255;109;0m{user-name}\u001b[0m\u001b[38;2;105;240;174m@\u001b[0m\u001b[38;2;255;109;0m{host-name}\u001b[0m"
     },
     {
       "type": "separator",
