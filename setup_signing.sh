@@ -74,7 +74,16 @@ setup_ssh() {
     git config --global commit.gpgsign true
     git config --global tag.gpgsign true
 
-    echo -e "${GREEN}[✓] ¡Git configurado para firmar con SSH!${NC}"
+    # Configurar allowed_signers local para verificación de firmas SSH por Git
+    ALLOWED_SIGNERS_FILE="$HOME/.ssh/allowed_signers"
+    touch "$ALLOWED_SIGNERS_FILE"
+    KEY_TYPE_AND_VAL=$(cat "${KEY_PATH}.pub")
+    if ! grep -qF "$KEY_TYPE_AND_VAL" "$ALLOWED_SIGNERS_FILE" 2>/dev/null; then
+        echo "$GIT_EMAIL $KEY_TYPE_AND_VAL" >> "$ALLOWED_SIGNERS_FILE"
+    fi
+    git config --global gpg.ssh.allowedSignersFile "$ALLOWED_SIGNERS_FILE"
+
+    echo -e "${GREEN}[✓] ¡Git configurado para firmar con SSH y verificar firmas localmente!${NC}"
     echo
     echo -e "${CYAN}====================================================${NC}"
     echo -e "${GREEN}   🎉  ¡PASO FINAL REQUERIDO EN TU CUENTA DE GITHUB!  🎉${NC}"
