@@ -35,7 +35,7 @@ fi
 
 # 2. Crear directorios necesarios
 echo
-echo -e "${YELLOW}[1/5] Preparando directorios...${NC}"
+echo -e "${YELLOW}[1/7] Preparando directorios...${NC}"
 mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/.config/fastfetch"
 export PATH="$HOME/.local/bin:$PATH"
@@ -43,7 +43,7 @@ echo -e "${GREEN}[✓] Directorios listos.${NC}"
 
 # 3. Instalar Starship
 echo
-echo -e "${YELLOW}[2/5] Instalando Starship prompt...${NC}"
+echo -e "${YELLOW}[2/7] Instalando Starship prompt...${NC}"
 if command -v starship &>/dev/null; then
     echo -e "${GREEN}[✓] Starship ya está instalado: $(starship --version 2>/dev/null | head -1)${NC}"
 else
@@ -54,7 +54,7 @@ fi
 
 # 4. Instalar eza
 echo
-echo -e "${YELLOW}[3/5] Instalando eza (ls moderno)...${NC}"
+echo -e "${YELLOW}[3/7] Instalando eza (ls moderno)...${NC}"
 if command -v eza &>/dev/null; then
     echo -e "${GREEN}[✓] eza ya está instalado.${NC}"
 else
@@ -71,7 +71,7 @@ fi
 
 # 5. Instalar fastfetch
 echo
-echo -e "${YELLOW}[4/5] Instalando fastfetch...${NC}"
+echo -e "${YELLOW}[4/7] Instalando fastfetch...${NC}"
 if command -v fastfetch &>/dev/null; then
     echo -e "${GREEN}[✓] fastfetch ya está instalado.${NC}"
 else
@@ -86,7 +86,7 @@ fi
 
 # 6. Copiar archivos de configuración (adaptados para Cloud Shell)
 echo
-echo -e "${YELLOW}[5/5] Copiando configuraciones adaptadas para Cloud Shell...${NC}"
+echo -e "${YELLOW}[5/7] Copiando configuraciones adaptadas para Cloud Shell...${NC}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -100,9 +100,51 @@ cp "$SCRIPT_DIR/configs/fastfetch.jsonc" "$HOME/.config/fastfetch/config.jsonc"
 # Cloud Shell usa Ubuntu así que dejamos ubuntu, pero ajustamos si no funciona
 echo -e "${GREEN}[✓] Fastfetch config → ~/.config/fastfetch/config.jsonc${NC}"
 
-# 7. Configurar .bashrc
+# 7. Configurar git sync alias (hostname = CSE)
 echo
-echo -e "${YELLOW}[+] Integrando configuración en ~/.bashrc...${NC}"
+echo -e "${YELLOW}[6/7] Configurando alias git sync (hostname=CSE)...${NC}"
+
+git config --global alias.sync '!f() { \
+    msg="${1:-Cambios en la matrix}"; \
+    m_num=$(date +%m); \
+    case "$m_num" in \
+        01) m_name="enero" ;; \
+        02) m_name="febrero" ;; \
+        03) m_name="marzo" ;; \
+        04) m_name="abril" ;; \
+        05) m_name="mayo" ;; \
+        06) m_name="junio" ;; \
+        07) m_name="julio" ;; \
+        08) m_name="agosto" ;; \
+        09) m_name="septiembre" ;; \
+        10) m_name="octubre" ;; \
+        11) m_name="noviembre" ;; \
+        12) m_name="diciembre" ;; \
+    esac; \
+    day=$(date +%d); \
+    day=${day#0}; \
+    date_str="${day}${m_name}$(date +%H:%M)"; \
+    commit_msg="$(whoami)@CSE ${date_str} - ${msg}"; \
+    current_branch=$(git branch --show-current); \
+    echo "=> Staging all changes..."; \
+    git add -A; \
+    echo "=> Creating commit: \"$commit_msg\"..."; \
+    git commit -m "$commit_msg" && \
+    echo "=> Pulling from origin $current_branch..."; \
+    git pull origin "$current_branch" && \
+    if git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then \
+        echo "=> Pulling from origin production..."; \
+        git pull origin production; \
+    fi && \
+    echo "=> Pushing to origin..."; \
+    git push origin HEAD; \
+}; f'
+
+echo -e "${GREEN}[✓] Alias 'git sync' configurado globalmente (hostname=CSE).${NC}"
+
+# 8. Configurar .bashrc
+echo
+echo -e "${YELLOW}[7/7] Integrando configuración en ~/.bashrc...${NC}"
 
 BASHRC="$HOME/.bashrc"
 APPEND_FILE="$SCRIPT_DIR/configs/bashrc_append.sh"

@@ -45,11 +45,11 @@ El entorno local cuenta con un alias avanzado para Git que simplifica el flujo d
 ### ¿Qué hace `git sync`?
 Este comando automatiza el proceso de commit y push de forma segura en un solo paso:
 1. **Stage**: Agrega todos los cambios (`git add -A`).
-2. **Commit firmado**: Crea un commit (`-S`) con un mensaje estructurado.
+2. **Commit**: Crea un commit con un mensaje estructurado.
    - Formato: `usuario@hostname fecha - mensaje`
-   - Ejemplo: `i7@DELL 16julio09:34 - Cambios en la matrix`
+   - Ejemplo: `limeyer@CSE 16julio09:34 - Cambios en la matrix`
 3. **Pull actual**: Hace pull de la rama actual (`origin $current_branch`) para evitar conflictos locales.
-4. **Pull production**: Hace pull de la rama `production` desde `origin`.
+4. **Pull production**: Si la rama `production` existe en el remoto, hace pull para mantener sincronía.
 5. **Push**: Sube los cambios locales (`origin HEAD`).
 
 ### Uso
@@ -80,16 +80,18 @@ git config --global alias.sync '!f() { \
     day=$(date +%d); \
     day=${day#0}; \
     date_str="${day}${m_name}$(date +%H:%M)"; \
-    commit_msg="$(whoami)@$(hostname) ${date_str} - ${msg}"; \
+    commit_msg="$(whoami)@CSE ${date_str} - ${msg}"; \
     current_branch=$(git branch --show-current); \
     echo "=> Staging all changes..."; \
     git add -A; \
-    echo "=> Creating signed commit: \"$commit_msg\"..."; \
-    git commit -S -m "$commit_msg" && \
+    echo "=> Creating commit: \"$commit_msg\"..."; \
+    git commit -m "$commit_msg" && \
     echo "=> Pulling from origin $current_branch..."; \
     git pull origin "$current_branch" && \
-    echo "=> Pulling from origin production..."; \
-    git pull origin production && \
+    if git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then \
+        echo "=> Pulling from origin production..."; \
+        git pull origin production; \
+    fi && \
     echo "=> Pushing to origin..."; \
     git push origin HEAD; \
 }; f'

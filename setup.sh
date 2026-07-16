@@ -29,14 +29,14 @@ fi
 
 # 2. Instalar paquetes de sistema (fastfetch, eza, starship)
 echo
-echo -e "${YELLOW}[1/4] Instalando herramientas del sistema (fastfetch, eza, starship)...${NC}"
+echo -e "${YELLOW}[1/5] Instalando herramientas del sistema (fastfetch, eza, starship)...${NC}"
 echo -e "${BLUE}[i] Ubuntu 26.04 incluye estas herramientas en sus repositorios oficiales.${NC}"
 sudo apt-get update
 sudo apt-get install -y fastfetch eza starship curl unzip tar
 
 # 3. Descargar e instalar JetBrainsMono Nerd Font
 echo
-echo -e "${YELLOW}[2/4] Instalando JetBrainsMono Nerd Font...${NC}"
+echo -e "${YELLOW}[2/5] Instalando JetBrainsMono Nerd Font...${NC}"
 SYS_FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
 
 if fc-list : family | grep -iq "JetBrainsMono Nerd Font"; then
@@ -62,7 +62,7 @@ fi
 
 # 4. Configurar Starship y Fastfetch
 echo
-echo -e "${YELLOW}[3/4] Copiando archivos de configuración...${NC}"
+echo -e "${YELLOW}[3/5] Copiando archivos de configuración...${NC}"
 
 # Starship config
 mkdir -p "$HOME/.config"
@@ -84,9 +84,51 @@ else
     exit 1
 fi
 
-# 5. Configurar .bashrc
+# 5. Configurar git sync alias
 echo
-echo -e "${YELLOW}[4/4] Integrando configuración en ~/.bashrc...${NC}"
+echo -e "${YELLOW}[4/5] Configurando alias git sync...${NC}"
+
+git config --global alias.sync '!f() { \
+    msg="${1:-Cambios en la matrix}"; \
+    m_num=$(date +%m); \
+    case "$m_num" in \
+        01) m_name="enero" ;; \
+        02) m_name="febrero" ;; \
+        03) m_name="marzo" ;; \
+        04) m_name="abril" ;; \
+        05) m_name="mayo" ;; \
+        06) m_name="junio" ;; \
+        07) m_name="julio" ;; \
+        08) m_name="agosto" ;; \
+        09) m_name="septiembre" ;; \
+        10) m_name="octubre" ;; \
+        11) m_name="noviembre" ;; \
+        12) m_name="diciembre" ;; \
+    esac; \
+    day=$(date +%d); \
+    day=${day#0}; \
+    date_str="${day}${m_name}$(date +%H:%M)"; \
+    commit_msg="$(whoami)@$(hostname) ${date_str} - ${msg}"; \
+    current_branch=$(git branch --show-current); \
+    echo "=> Staging all changes..."; \
+    git add -A; \
+    echo "=> Creating commit: \"$commit_msg\"..."; \
+    git commit -m "$commit_msg" && \
+    echo "=> Pulling from origin $current_branch..."; \
+    git pull origin "$current_branch" && \
+    if git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then \
+        echo "=> Pulling from origin production..."; \
+        git pull origin production; \
+    fi && \
+    echo "=> Pushing to origin..."; \
+    git push origin HEAD; \
+}; f'
+
+echo -e "${GREEN}[✓] Alias 'git sync' configurado globalmente.${NC}"
+
+# 6. Configurar .bashrc
+echo
+echo -e "${YELLOW}[5/5] Integrando configuración en ~/.bashrc...${NC}"
 
 BASHRC="$HOME/.bashrc"
 APPEND_FILE="configs/bashrc_append.sh"
