@@ -38,6 +38,66 @@ Setup completo para una terminal de desarrollo profesional con estética **Mater
 
 ---
 
+## 🔄 Git Sync (Sincronización automatizada)
+
+El entorno local cuenta con un alias avanzado para Git que simplifica el flujo de desarrollo.
+
+### ¿Qué hace `git sync`?
+Este comando automatiza el proceso de commit y push de forma segura en un solo paso:
+1. **Stage**: Agrega todos los cambios (`git add -A`).
+2. **Commit firmado**: Crea un commit (`-S`) con un mensaje estructurado.
+   - Formato: `usuario@hostname fecha - mensaje`
+   - Ejemplo: `i7@DELL 16julio09:34 - Cambios en la matrix`
+3. **Pull actual**: Hace pull de la rama actual (`origin $current_branch`) para evitar conflictos locales.
+4. **Pull production**: Hace pull de la rama `production` desde `origin`.
+5. **Push**: Sube los cambios locales (`origin HEAD`).
+
+### Uso
+- Sin argumentos (mensaje por defecto): `git sync`
+- Con mensaje personalizado: `git sync "Fix del botón de login"`
+
+### Configuración en Ubuntu 26
+Para añadir este alias a tu entorno global, copia y pega el siguiente bloque en tu terminal:
+
+```bash
+git config --global alias.sync '!f() { \
+    msg="${1:-Cambios en la matrix}"; \
+    m_num=$(date +%m); \
+    case "$m_num" in \
+        01) m_name="enero" ;; \
+        02) m_name="febrero" ;; \
+        03) m_name="marzo" ;; \
+        04) m_name="abril" ;; \
+        05) m_name="mayo" ;; \
+        06) m_name="junio" ;; \
+        07) m_name="julio" ;; \
+        08) m_name="agosto" ;; \
+        09) m_name="septiembre" ;; \
+        10) m_name="octubre" ;; \
+        11) m_name="noviembre" ;; \
+        12) m_name="diciembre" ;; \
+    esac; \
+    day=$(date +%d); \
+    day=${day#0}; \
+    date_str="${day}${m_name}$(date +%H:%M)"; \
+    commit_msg="$(whoami)@$(hostname) ${date_str} - ${msg}"; \
+    current_branch=$(git branch --show-current); \
+    echo "=> Staging all changes..."; \
+    git add -A; \
+    echo "=> Creating signed commit: \"$commit_msg\"..."; \
+    git commit -S -m "$commit_msg" && \
+    echo "=> Pulling from origin $current_branch..."; \
+    git pull origin "$current_branch" && \
+    echo "=> Pulling from origin production..."; \
+    git pull origin production && \
+    echo "=> Pushing to origin..."; \
+    git push origin HEAD; \
+}; f'
+```
+
+---
+
+
 ## Entornos soportados
 
 ### 🖥️ Ubuntu 26.04 en WSL2
