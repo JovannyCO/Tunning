@@ -36,6 +36,14 @@ Setup completo para una terminal de desarrollo profesional con estética **Mater
 | ` ` | Archivos sin rastrear |
 | sin flecha | Sincronizado con remoto |
 
+### Zona horaria
+`configs/bashrc_append.sh` fija `TZ='America/Bogota'` (hora de Colombia, UTC‑5, sin DST).
+Aplica a `date`, al segmento `$time` del prompt y a la fecha de fastfetch — en cualquier
+entorno (WSL2 o Cloud Shell). Es necesario en Cloud Shell porque el contenedor arranca
+siempre en `Etc/UTC` y se resetea entre sesiones (no hay systemd para `timedatectl`, y
+`/etc/timezone` vive fuera de `~/` así que no persistiría); `TZ` sí persiste porque viaja
+en el propio `.bashrc`.
+
 ---
 
 ## 🔄 Git Sync (Sincronización automatizada)
@@ -134,13 +142,18 @@ chmod +x setup-cloudshell.sh && bash setup-cloudshell.sh
 source ~/.bashrc
 ```
 
-> **Nota sobre fuentes en Cloud Shell:** Cloud Shell renderiza la terminal en el navegador.
-> Para ver los íconos Nerd Font correctamente, instala
-> [JetBrainsMono Nerd Font](https://github.com/ryanoasis/nerd-fonts/releases/latest)
-> en tu **máquina local** y configúrala en la terminal del navegador
-> (Chrome → DevTools → Settings no aplica; usa una extensión como
-> [Custom CSS](https://chromewebstore.google.com/detail/custom-css) o accede
-> desde un emulador de terminal externo con SSH).
+> **Nota sobre fuentes en Cloud Shell:** Cloud Shell Editor es VS Code (code-oss) corriendo
+> en el navegador — la terminal integrada la pinta el navegador con una fuente **local**,
+> el servidor no puede inyectar una (se verificó: `code-oss-for-cloud-shell` no trae ninguna
+> Nerd Font empaquetada como web font). Sin la fuente instalada localmente, los íconos se ven
+> como rectángulos. Dos pasos:
+> 1. Instala [JetBrainsMono Nerd Font Mono](https://github.com/ryanoasis/nerd-fonts/releases/latest)
+>    en la **máquina donde corre el navegador** (la misma fuente del setup WSL2 — si ya la
+>    instalaste para Windows Terminal en esa PC, este paso ya está hecho).
+> 2. En Cloud Shell Editor: `Ctrl+Shift+P` → *Preferences: Open User Settings (JSON)* y agrega
+>    `"terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', monospace"`
+>    (ya viene preconfigurado en `~/.config/Code/User/settings.json` en este entorno).
+>    Recarga la ventana o vuelve a abrir el panel de terminal para que tome la fuente nueva.
 
 ## Estructura del repo
 

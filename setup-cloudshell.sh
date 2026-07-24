@@ -161,23 +161,29 @@ if [ -f "$APPEND_FILE" ]; then
         mv "$TEMP_BASHRC" "$BASHRC"
     fi
 
-    # IMPORTANTE: Asegurar que la línea de Google Cloud Shell esté al final
-    # Primero la removemos temporalmente si existe
+    # Primero removemos la línea de Google Cloud Shell si ya existe, para reinsertarla
+    # en la posición correcta (ver nota IMPORTANTE abajo).
     if grep -qF "$GOOGLE_LINE" "$BASHRC" 2>/dev/null; then
         TEMP_BASHRC=$(mktemp)
         grep -vF "$GOOGLE_LINE" "$BASHRC" > "$TEMP_BASHRC"
         mv "$TEMP_BASHRC" "$BASHRC"
     fi
 
-    # Agregar las configuraciones del tunning
+    # IMPORTANTE: bashrc.google debe cargarse ANTES del bloque Tunning, no después.
+    # bashrc.google define sus propios alias (ls, ll, la, l, grep...) sin condicional;
+    # si se carga al final, esos alias pisan silenciosamente los de eza/colores de
+    # Tunning y el tema "Terminal PRO" deja de verse pese a estar instalado.
+    # Cargándolo primero, Cloud Shell inicializa su entorno (Docker, PATH de gcloud,
+    # chequeo de disco, etc.) con normalidad y el bloque Tunning queda como última
+    # palabra sobre el prompt y los alias visibles.
     {
+        echo ""
+        echo "# === Google Cloud Shell (NO ELIMINAR) ==="
+        echo "$GOOGLE_LINE"
         echo ""
         echo "$MARKER"
         cat "$APPEND_FILE"
         echo "$END_MARKER"
-        echo ""
-        echo "# === Google Cloud Shell (NO ELIMINAR) ==="
-        echo "$GOOGLE_LINE"
     } >> "$BASHRC"
 
     echo -e "${GREEN}[✓] ~/.bashrc actualizado exitosamente.${NC}"

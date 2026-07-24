@@ -1,3 +1,10 @@
+# ── PATH ─────────────────────────────────────────────────────────────────
+# Debe ir primero: starship/eza/fastfetch viven en ~/.local/bin, y los
+# bloques de abajo (alias de eza, etc.) hacen `command -v` sobre ellos.
+# Si esto se exporta después (como antes, junto a "Starship prompt"),
+# `command -v eza` falla en una shell nueva y el alias cae al `ls` plano.
+export PATH="$HOME/.local/bin:$PATH"
+
 # ── Historia ────────────────────────────────────────────────────────────
 HISTCONTROL=ignoreboth:erasedups
 HISTSIZE=10000
@@ -102,13 +109,17 @@ export LC_ALL='C.UTF-8'
 export COLORTERM=truecolor
 export TERM=xterm-256color
 
+# Zona horaria fija (Colombia). Cloud Shell resetea el contenedor entre
+# sesiones y siempre arranca en Etc/UTC — no hay systemd para `timedatectl`,
+# y tocar /etc/timezone no persistiría (vive fuera de ~/). TZ sí persiste
+# porque se exporta desde este archivo, y la respetan `date`, el módulo
+# $time de Starship y el datetime de fastfetch.
+export TZ='America/Bogota'
+
 # ── NVM ──────────────────────────────────────────────────────────────────
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-
-# ── PATH ─────────────────────────────────────────────────────────────────
-export PATH="$HOME/.local/bin:$PATH"
 
 # ── Bienvenida (fastfetch al abrir terminal) ─────────────────────────────
 if command -v fastfetch &>/dev/null && [[ $- == *i* ]] && [[ -z "$FASTFETCH_SHOWN" ]]; then
