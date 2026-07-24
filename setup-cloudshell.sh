@@ -94,11 +94,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$SCRIPT_DIR/configs/starship-cloudshell.toml" "$HOME/.config/starship.toml"
 echo -e "${GREEN}[✓] Starship config (Cloud Shell) → ~/.config/starship.toml${NC}"
 
-# Fastfetch config — adaptar logo para Cloud Shell
-cp "$SCRIPT_DIR/configs/fastfetch.jsonc" "$HOME/.config/fastfetch/config.jsonc"
-# Cambiar logo de ubuntu a algo más apropiado para Cloud Shell
-# Cloud Shell usa Ubuntu así que dejamos ubuntu, pero ajustamos si no funciona
-echo -e "${GREEN}[✓] Fastfetch config → ~/.config/fastfetch/config.jsonc${NC}"
+# Fastfetch config — versión Cloud Shell (sin íconos Nerd Font en las keys;
+# el panel de terminal no puede pintarlos, ver nota en starship-cloudshell.toml)
+cp "$SCRIPT_DIR/configs/fastfetch-cloudshell.jsonc" "$HOME/.config/fastfetch/config.jsonc"
+echo -e "${GREEN}[✓] Fastfetch config (Cloud Shell, sin íconos) → ~/.config/fastfetch/config.jsonc${NC}"
 
 # 7. Configurar git sync alias (hostname = CSE)
 echo

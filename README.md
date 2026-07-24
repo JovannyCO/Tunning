@@ -132,7 +132,7 @@ Adaptado para Cloud Shell (Ubuntu 24.04 Noble). Diferencias clave:
 |---------|-------------------|--------------------|
 | Instalación | `sudo apt install` | Binarios en `~/.local/bin` (starship, eza) + `.deb` (fastfetch) |
 | Hostname | Dinámico (`$hostname`) | Fijo: `CSE` (Cloud Shell Editor) |
-| Fuentes | Nerd Font instalada en sistema | Depende del navegador (ver nota) |
+| Fuentes | Nerd Font instalada en sistema | Sin íconos — no es configurable (ver nota) |
 | Windows Terminal | Esquema de color Material MD3 | N/A |
 | `bashrc.google` | N/A | Se preserva `source /google/devshell/bashrc.google` |
 | Persistencia | Disco local | `~/` persiste entre sesiones de Cloud Shell |
@@ -142,18 +142,20 @@ chmod +x setup-cloudshell.sh && bash setup-cloudshell.sh
 source ~/.bashrc
 ```
 
-> **Nota sobre fuentes en Cloud Shell:** Cloud Shell Editor es VS Code (code-oss) corriendo
-> en el navegador — la terminal integrada la pinta el navegador con una fuente **local**,
-> el servidor no puede inyectar una (se verificó: `code-oss-for-cloud-shell` no trae ninguna
-> Nerd Font empaquetada como web font). Sin la fuente instalada localmente, los íconos se ven
-> como rectángulos. Dos pasos:
-> 1. Instala [JetBrainsMono Nerd Font Mono](https://github.com/ryanoasis/nerd-fonts/releases/latest)
->    en la **máquina donde corre el navegador** (la misma fuente del setup WSL2 — si ya la
->    instalaste para Windows Terminal en esa PC, este paso ya está hecho).
-> 2. En Cloud Shell Editor: `Ctrl+Shift+P` → *Preferences: Open User Settings (JSON)* y agrega
->    `"terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', monospace"`
->    (ya viene preconfigurado en `~/.config/Code/User/settings.json` en este entorno).
->    Recarga la ventana o vuelve a abrir el panel de terminal para que tome la fuente nueva.
+> **Nota sobre íconos en Cloud Shell (confirmado, no es un hack pendiente):** el panel de
+> terminal de Cloud Shell Editor no es un terminal VS Code corriente — su ícono de engranaje
+> (dentro del propio panel, no el Command Palette) trae un selector de **Font** con una lista
+> fija de fuentes predefinidas, sin campo de texto libre. No hay forma de apuntarlo a una Nerd
+> Font aunque esté instalada en tu máquina local, y `terminal.integrated.fontFamily` en
+> `settings.json` tampoco aplica ahí. Por eso `setup-cloudshell.sh` instala variantes **sin
+> íconos** (`starship-cloudshell.toml`, `fastfetch-cloudshell.jsonc`, y `eza` con
+> `--icons=never` cuando detecta `$CLOUD_SHELL`) en vez de depender de una fuente que el panel
+> nunca podrá cargar. Mismos colores y estructura MD3, con separadores planos y símbolos en
+> Unicode estándar (`↑ ↓ ✗ ❯ ─`) en lugar de glifos Nerd Font.
+>
+> Si quieres los íconos reales, la única vía es no usar el panel de terminal de Cloud Shell:
+> conéctate a este mismo entorno desde una terminal de verdad (p. ej. `gcloud cloud-shell ssh`
+> desde Windows Terminal, donde ya tienes la Nerd Font instalada para el setup WSL2).
 
 ## Estructura del repo
 
@@ -165,9 +167,10 @@ Tunning/
 ├── setup-cloudshell.sh               # Instalador para Google Cloud Shell Editor
 └── configs/
     ├── bashrc_append.sh              # Aliases, funciones, historia (compartido)
-    ├── starship.toml                 # Prompt Starship — hostname dinámico
-    ├── starship-cloudshell.toml      # Prompt Starship — hostname fijo "CSE"
-    ├── fastfetch.jsonc               # Bienvenida fastfetch (compartido)
+    ├── starship.toml                 # Prompt Starship — hostname dinámico, con íconos
+    ├── starship-cloudshell.toml      # Prompt Starship — hostname "CSE", sin íconos
+    ├── fastfetch.jsonc               # Bienvenida fastfetch (compartido), con íconos
+    ├── fastfetch-cloudshell.jsonc    # Bienvenida fastfetch — Cloud Shell, sin íconos
     └── windows_terminal_scheme.json  # Esquema de color para Windows Terminal
 ```
 

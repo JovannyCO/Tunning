@@ -48,13 +48,24 @@ alias ~='cd ~'
 alias -- -='cd -'
 
 # ── Aliases: listado de archivos (eza) ───────────────────────────────────
+# Cloud Shell no puede pintar íconos Nerd Font: el selector de fuente del
+# panel de terminal es una lista fija sin fuentes personalizadas (se
+# verificó con el usuario), así que con --icons=always todo se ve con
+# rectángulos. Se detecta el entorno (var oficial de Cloud Shell) y se
+# desactivan los íconos solo ahí; WSL2 conserva los íconos normales.
+if [ -n "${CLOUD_SHELL:-}" ]; then
+    EZA_ICONS='never'
+else
+    EZA_ICONS='always'
+fi
+
 if command -v eza &>/dev/null; then
-    alias ls='eza --icons=always --group-directories-first --color=always'
-    alias ll='eza -la --icons=always --group-directories-first --color=always --git --header'
-    alias la='eza -a --icons=always --group-directories-first --color=always'
-    alias lt='eza -T --icons=always --color=always --level=3'
-    alias l='eza -1 --icons=always --color=always'
-    alias lg='eza -la --icons=always --git --git-ignore --color=always'
+    alias ls="eza --icons=$EZA_ICONS --group-directories-first --color=always"
+    alias ll="eza -la --icons=$EZA_ICONS --group-directories-first --color=always --git --header"
+    alias la="eza -a --icons=$EZA_ICONS --group-directories-first --color=always"
+    alias lt="eza -T --icons=$EZA_ICONS --color=always --level=3"
+    alias l="eza -1 --icons=$EZA_ICONS --color=always"
+    alias lg="eza -la --icons=$EZA_ICONS --git --git-ignore --color=always"
 else
     alias ls='ls --color=auto'
     alias ll='ls -alF --color=auto'
