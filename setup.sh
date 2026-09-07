@@ -130,5 +130,5 @@ echo -e "      b. En el perfil activo (por ejemplo, 'Unnamed'), marca la casilla
 echo -e "      c. Busca y selecciona: ${GREEN}JetBrainsMono Nerd Font Mono Regular${NC} o ${GREEN}JetBrainsMono NF Regular${NC}."
 echo -e "      d. Guarda y cierra."
 echo
-echo -e " 🎉 ¡A disfrutar de tu nueva terminal PRO con Material MD3! 🎉"
+echo -e "  ¡A disfrutar de tu nueva terminal PRO con Material MD3!"
 echo
