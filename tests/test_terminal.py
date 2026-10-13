@@ -43,7 +43,7 @@ class GitFixture(Fixture):
         execute(['git', 'init', '-q', '-b', 'main', self.work], env=self.env)
         for key, value in [('user.name', 'Audit'), ('user.email', 'audit@example.invalid'),
                            ('commit.gpgsign', 'false'), ('tunning.syncSign', 'false'),
-                           ('alias.sync', '!bash ' + shlex.quote(str(REPO / 'scripts/git-sync.sh')))]:
+                           ('alias.sync', '!bash ' + shlex.quote(str(REPO / 'scripts/git-sync.sh')) + ' --tunning-mode=sync')]:
             self.git('config', key, value)
         (self.work / 'file.txt').write_text('base\n')
         self.git('add', '.')
@@ -84,6 +84,12 @@ class GitSyncTests(GitFixture):
         self.assertNotEqual(self.initial, self.remote_head())
         self.assertFalse((self.work / 'NEVER').exists())
         self.assertFalse(self.git('status', '--porcelain').stdout)
+
+    def test_internal_mode_text_remains_literal_message_in_sync(self):
+        self.modify()
+        self.git('sync', '--tunning-mode=syncPRmerge')
+        self.assertIn('--tunning-mode=syncPRmerge', self.git('log', '-1', '--format=%s').stdout)
+        self.assertEqual(self.git('rev-parse', 'HEAD').stdout.strip(), self.remote_head())
 
     def test_rejected_commit_stops_before_push(self):
         self.modify()
