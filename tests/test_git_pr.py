@@ -1,11 +1,13 @@
 """Modos PR y criterios: remotos temporales y gh simulado, sin credenciales reales."""
 import json
 import shlex
+from pathlib import Path
 
 from test_terminal import GitFixture, REPO, execute
+import test_git_sync_submodules as submodule_fixtures
 
 
-class GitPRTests(GitFixture):
+class GitPRFixture(GitFixture):
     def setUp(self):
         super().setUp()
         previous = self.work
@@ -44,6 +46,7 @@ class GitPRTests(GitFixture):
         file.write_text(json.dumps([{'id': 'A1', 'detail': 'Local fixtures passed'}, {'id': 'A2', 'detail': 'Reviewed child references'}]))
         return self.criterion_command('--record', file, '--run', '42')
 
+class GitPRTests(GitPRFixture):
     def test_create_and_reuse_single_issue_pr_literal_message(self):
         self.modify()
         message = 'literal $(touch NEVER) `touch NEVER` con espacios'
@@ -135,3 +138,180 @@ class GitPRTests(GitFixture):
         self.assertIn('tunning.prPolicy', result.stderr)
         self.assertFalse(any(c['path'].endswith('/merge') for c in self.api()['calls']))
         self.assertEqual(self.initial, self.remote_head())
+
+
+class AuditFixture(GitPRFixture):
+    def make_policy(self, commands=None, provider='anthropic'):
+        if not hasattr(self, 'fingerprint'):
+            keyring = self.root / 'keyring'
+            keyring.mkdir(mode=0o700)
+            self.env['GNUPGHOME'] = str(keyring)
+            self.addCleanup(lambda: execute(['gpgconf', '--kill', 'gpg-agent'], env=self.env, check=False))
+            execute(['gpg', '--batch', '--pinentry-mode', 'loopback', '--passphrase', '', '--quick-generate-key',
+                     'Fixture Auditor <fixture@example.invalid>', 'ed25519', 'sign', '0'], env=self.env)
+            listing = execute(['gpg', '--with-colons', '--fingerprint', '--list-keys'], env=self.env).stdout
+            self.fingerprint = next(line.split(':')[9] for line in listing.splitlines() if line.startswith('fpr:'))
+        self.policy = self.root / 'trusted-policy.json'
+        self.policy.write_text(json.dumps({'commands': commands or [['python3', '-c', 'print("fixture tests OK")']],
+            'checks': ['terminal'], 'auditors': {self.fingerprint: {'provider': provider, 'identity': 'Fixture Auditor'}}}))
+        self.git('config', 'tunning.prPolicy', str(self.policy))
+        self.report = self.root / 'signed-report.json'
+        self.git('config', 'tunning.auditReport', str(self.report))
+
+    def run_audit(self, *extra):
+        return execute(['bash', REPO / 'scripts/git-sync.sh', '--tunning-mode=audit', '--provider', 'anthropic',
+                        '--session', 'auditor-terminal', '--environment', 'fixture-independent-terminal',
+                        '--signing-key', self.fingerprint, '--output', self.report, *extra],
+                       cwd=self.work, env=self.env, check=False)
+
+    def prepare_audit(self, commands=None):
+        self.make_policy(commands)
+        self.modify()
+        self.git('syncPR')
+
+
+class AuditTests(AuditFixture):
+    def test_signed_audit_keeps_source_index_head_and_main_unchanged(self):
+        self.prepare_audit()
+        before = (self.git('rev-parse', 'HEAD').stdout, (self.work / '.git/index').read_bytes(),
+                  (self.work / 'file.txt').read_bytes())
+        result = self.run_audit('--approve')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        after = (self.git('rev-parse', 'HEAD').stdout, (self.work / '.git/index').read_bytes(),
+                 (self.work / 'file.txt').read_bytes())
+        self.assertEqual(before, after)
+        report = json.loads(self.report.read_text())
+        self.assertTrue(report['unchanged'])
+        self.assertEqual(report['tests'][0]['returncode'], 0)
+        self.assertTrue(Path(str(self.report) + '.asc').exists())
+        self.assertEqual(self.initial, self.remote_head())
+        self.assertNotEqual(self.run_audit('--approve').returncode, 0)
+
+    def test_audit_detects_file_mutation_without_correcting_it(self):
+        self.prepare_audit([['python3', '-c', 'from pathlib import Path; Path("file.txt").write_text("unexpected edit")']])
+        result = self.run_audit('--approve')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(json.loads(self.report.read_text())['unchanged'])
+        self.assertEqual((self.work / 'file.txt').read_text(), 'unexpected edit')
+
+    def test_audit_detects_head_mutation(self):
+        self.prepare_audit([['git', 'commit', '--allow-empty', '-m', 'unexpected commit']])
+        previous = self.git('rev-parse', 'HEAD').stdout
+        self.assertNotEqual(self.run_audit('--approve').returncode, 0)
+        self.assertFalse(json.loads(self.report.read_text())['unchanged'])
+        self.assertNotEqual(previous, self.git('rev-parse', 'HEAD').stdout)
+
+    def test_audit_detects_index_mutation(self):
+        self.prepare_audit([['git', 'update-index', '--chmod=+x', 'file.txt']])
+        self.assertNotEqual(self.run_audit('--approve').returncode, 0)
+        self.assertFalse(json.loads(self.report.read_text())['unchanged'])
+
+    def test_failing_suite_records_failure_and_blocks_approval(self):
+        self.prepare_audit([['python3', '-c', 'raise SystemExit(1)']])
+        self.assertNotEqual(self.run_audit('--approve').returncode, 0)
+        self.assertEqual(json.loads(self.report.read_text())['tests'][0]['returncode'], 1)
+
+    def test_same_provider_blocks_audit_before_tests(self):
+        self.prepare_audit()
+        policy = json.loads(self.policy.read_text())
+        policy['auditors'][self.fingerprint]['provider'] = 'openai'
+        self.policy.write_text(json.dumps(policy))
+        self.assertNotEqual(self.run_audit('--approve').returncode, 0)
+        self.assertFalse(self.report.exists())
+
+    def test_report_inside_checkout_is_rejected(self):
+        self.prepare_audit()
+        self.report = self.work / 'report.json'
+        self.assertIn('fuera del checkout', self.run_audit('--approve').stderr)
+
+    def test_findings_recorded_without_self_approval(self):
+        self.prepare_audit()
+        findings = self.root / 'findings.json'
+        findings.write_text('[{"detail":"A defect remains"}]')
+        self.assertNotEqual(self.run_audit('--findings', findings).returncode, 0)
+        self.assertFalse(json.loads(self.report.read_text())['review_approved'])
+
+
+class PRTreeFixture(GitPRFixture):
+    record_push = submodule_fixtures.SubmoduleSyncTests.record_push
+    add_child = submodule_fixtures.SubmoduleSyncTests.add_child
+    remote_oid = submodule_fixtures.SubmoduleSyncTests.remote_oid
+    change = submodule_fixtures.SubmoduleSyncTests.change
+
+    def setUp(self):
+        super().setUp()
+        self.sequence = 0
+        self.publications = self.root / 'publications'
+        for key, value in [('user.name', 'Fixture'), ('user.email', 'fixture@example.invalid'),
+                           ('commit.gpgsign', 'false'), ('tunning.syncSign', 'false'),
+                           ('protocol.file.allow', 'always'), ('tunning.implementerProvider', 'openai'),
+                           ('tunning.implementerSession', 'implementer-terminal')]:
+            self.git('config', '--file', self.env['GIT_CONFIG_GLOBAL'], key, value)
+        self.record_push(self.remote, 'parent')
+
+    def module(self, parent=None, path='child', branch='topic'):
+        child = self.add_child(parent=parent, path=path, branch=branch, configured=branch)
+        self.git('push', '-q', 'origin', branch + ':main', cwd=child['path'])
+        name = 'fixture/' + child['name']
+        url = f'https://github.com/{name}.git'
+        self.git('config', '--file', self.env['GIT_CONFIG_GLOBAL'], 'url.' + str(child['remote']) + '.insteadOf', url)
+        self.git('remote', 'set-url', 'origin', url, cwd=child['path'])
+        data = self.api()
+        data['repositories'][name] = {'remote': str(child['remote'])}
+        self.api_file.write_text(json.dumps(data))
+        child['repository'] = name
+        return child
+
+
+class PRTreeTests(PRTreeFixture):
+    def test_two_children_pending_clean_commit_literal_path_before_parent(self):
+        first = self.module(path="child with ' spaces $(literal)")
+        second = self.module(path='second', branch='review')
+        self.change(first)
+        self.change(second)
+        self.git('commit', '-qam', 'already committed', cwd=second['path'])
+        result = self.git('syncPR', 'literal $(touch NEVER) `touch NEVER`')
+        created = [c['repository'] for c in self.api()['calls'] if c['method'] == 'POST' and c['path'] == 'pulls']
+        self.assertEqual(created, [first['repository'], second['repository'], 'fixture/parent'])
+        self.assertIn('Sincronizados 3 repositorios', result.stdout)
+        for child in (first, second):
+            self.assertEqual(self.git('rev-parse', 'HEAD', cwd=child['path']).stdout.strip(),
+                             self.git('rev-parse', 'HEAD:' + child['relative']).stdout.strip())
+        self.git('syncPR')
+        self.assertTrue(all(len(r['prs']) == 1 and len(r['issues']) == 1 for r in self.api()['repositories'].values()))
+
+    def test_nested_pr_order(self):
+        child = self.module()
+        leaf = self.module(parent=child['path'], path='nested')
+        self.change(leaf)
+        self.git('syncPR')
+        created = [c['repository'] for c in self.api()['calls'] if c['method'] == 'POST' and c['path'] == 'pulls']
+        self.assertEqual(created, [leaf['repository'], child['repository'], 'fixture/parent'])
+
+    def test_child_api_failure_prevents_parent_staging(self):
+        child = self.module()
+        self.change(child)
+        before = self.git('rev-parse', 'HEAD').stdout
+        data = self.api()
+        data['repositories'][child['repository']]['failure'] = ['POST', 'pulls']
+        self.api_file.write_text(json.dumps(data))
+        (self.work / 'parent change').write_text('parent work')
+        result = self.git('syncPR', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('[child]', result.stderr)
+        self.assertEqual(before, self.git('rev-parse', 'HEAD').stdout)
+        self.assertFalse(self.git('diff', '--cached', '--stat').stdout)
+        self.assertNotIn('prs', self.api()['repositories']['fixture/parent'])
+
+    def test_later_child_permissions_fail_before_first_commit(self):
+        first, second = self.module(path='one'), self.module(path='two')
+        self.change(first)
+        self.change(second)
+        data = self.api()
+        data['repositories'][second['repository']]['push'] = False
+        self.api_file.write_text(json.dumps(data))
+        before = self.git('rev-parse', 'HEAD', cwd=first['path']).stdout
+        result = self.git('syncPR', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(before, self.git('rev-parse', 'HEAD', cwd=first['path']).stdout)
+        self.assertNotIn('Agregando', result.stdout)

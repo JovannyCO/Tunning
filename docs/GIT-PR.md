@@ -88,6 +88,26 @@ auditor/entorno/sesión, comandos/resultados y hashes de logs, sin hallazgos.
 Una aprobación escrita en texto libre o los tests del implementador no lo
 sustituyen. No publiques logs con credenciales o datos privados.
 
+En la terminal del auditor, después de revisar el código, genera el informe
+con el mismo motor instalado. Este modo ejecuta solo las suites acordadas,
+comprueba HEAD, bytes del índice y archivos propios/hijos antes y después,
+y conserva incluso los informes fallidos; no confirma, publica ni corrige.
+
+```bash
+~/.local/bin/git-sync --tunning-mode=audit \
+  --provider anthropic --session claude-terminal-2 --environment terminal-2 \
+  --signing-key FINGERPRINT_GPG_COMPLETO --output /tmp/auditoria-sha.json --approve
+git config tunning.auditReport /tmp/auditoria-sha.json
+```
+
+Si hay defectos, usa `--findings /tmp/hallazgos.json` (array JSON) en lugar de
+`--approve` y entrega el resultado al implementador. Usa otra ruta para cada
+informe; no sobrescribe informes ni firmas. El comando detecta cambios de
+código pero no aísla procesos: las suites acordadas también deben ser de
+lectura sobre el checkout. Conserva los cambios inesperados para su revisión.
+El responsable autoriza la clave y el auditor declara el entorno/sesión;
+la herramienta no certifica que se trate de otra máquina física.
+
 ## Fusión y reanudación
 
 `git syncPRmerge` verifica CI, checks, revisiones acordadas, estado del PR,
@@ -95,6 +115,8 @@ método permitido y SHA remoto/base inmediatamente antes de la llamada a GitHub.
 Usa la condición `sha` del endpoint normal de merge; no emplea force ni
 admin override. GitHub aplica las protecciones y reglas adicionales del repo.
 No exige al autor autoaprobar su propio PR.
+Los PR se crean en borrador: el responsable debe marcarlos listos para revisión
+tras comprobar sus criterios. Un borrador siempre bloquea la fusión.
 
 El progreso se guarda por repositorio en el directorio Git, en
 `tunning-sync/state.json`. Las fusiones remotas son parciales: un fallo detiene
