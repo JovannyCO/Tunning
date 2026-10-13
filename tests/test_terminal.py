@@ -188,6 +188,10 @@ class InstallTests(Fixture):
         self.assertEqual(execute(['git', 'config', '--file', config, 'commit.gpgsign']).stdout.strip(), 'true')
         env = {**self.env, 'GIT_CONFIG_GLOBAL': str(config)}
         self.assertIn('Uso: git sync', execute(['git', 'sync', '-h'], cwd=self.root, env=env).stdout)
+        for mode in ('syncPR', 'syncPRmerge'):
+            self.assertIn(mode, execute(['git', mode, '--help'], cwd=self.root, env=env).stdout)
+            alias = execute(['git', 'config', '--file', config, 'alias.' + mode]).stdout.strip()
+            self.assertTrue(alias.endswith('--tunning-mode=' + mode))
 
     def test_incomplete_marker_preserves_entire_target(self):
         target = self.root / 'target'

@@ -61,6 +61,12 @@ devup -y
 
 `git sync` confirma, integra y publica la rama de trabajo de cada repositorio. `devup -l` actualiza las CLI contempladas; `devup -y` incluye la actualización del sistema. Revisa la [guía de Git sync](docs/USO.md#git-sync) y la [guía de devup](docs/USO.md#devup) antes del primer uso.
 
+Para revisar cambios individuales, `git syncPR "mensaje"` publica y prepara PR
+con sus issues; `git syncPRmerge` exige criterios, CI y auditoría independiente
+vigentes antes de fusionar, de hijos a padres. Consulta la [política y guía de
+PR](docs/GIT-PR.md). Los tres alias comparten el motor recursivo y conservan
+la firma y rama de trabajo de cada repositorio.
+
 **Antes de publicar:** configura la autenticación y la firma que use tu repositorio. `git sync` agrega todos los archivos no ignorados; mantén credenciales y claves privadas fuera del control de versiones. Los detalles están en la [guía de uso](docs/USO.md#git-sync).
 
 ## Jovanny Medina Cifuentes: dos roles, un mismo proyecto
