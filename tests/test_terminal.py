@@ -34,7 +34,7 @@ class Fixture(unittest.TestCase):
         return path
 
 
-class GitSyncTests(Fixture):
+class GitFixture(Fixture):
     def setUp(self):
         super().setUp()
         self.remote = self.root / 'origin.git'
@@ -74,6 +74,8 @@ class GitSyncTests(Fixture):
         self.git('push', '-q', 'origin', branch, cwd=peer)
         return peer
 
+
+class GitSyncTests(GitFixture):
     def test_success_and_literal_message(self):
         self.modify()
         message = 'literal $(touch NEVER) `touch NEVER` con espacios'
@@ -215,6 +217,23 @@ class InstallTests(Fixture):
         target = self.root / 'target'
         self.install(target, '--dry-run')
         self.assertFalse(target.exists())
+
+    def test_update_replaces_independent_sync_copy_and_preserves_preferences(self):
+        target = self.root / 'target'
+        self.install(target)
+        binary = target / '.local/bin/git-sync'
+        old = b'#!/bin/sh\necho old-sync\n'
+        binary.write_bytes(old)
+        config = target / '.gitconfig'
+        for key in ('tunning.syncSign', 'tunning.syncProduction'):
+            execute(['git', 'config', '--file', config, key, 'false'], env=self.env)
+        self.install(target)
+        self.assertEqual(binary.read_bytes(), (REPO / 'scripts/git-sync.sh').read_bytes())
+        self.assertFalse(binary.is_symlink())
+        backups = list((target / '.local/state/tunning/backups').glob('*/.local/bin/git-sync'))
+        self.assertEqual([p.read_bytes() for p in backups], [old])
+        for key in ('tunning.syncSign', 'tunning.syncProduction'):
+            self.assertEqual(execute(['git', 'config', '--file', config, key], env=self.env).stdout.strip(), 'false')
 
     def test_cloudshell_retains_variants_and_google_before_tunning(self):
         target = self.root / 'cloud'
