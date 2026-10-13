@@ -13,7 +13,7 @@ class SubmoduleSyncTests(GitFixture):
         for key, value in [('user.name', 'Audit'), ('user.email', 'audit@example.invalid'),
                            ('commit.gpgsign', 'false'), ('tunning.syncSign', 'false'),
                            ('protocol.file.allow', 'always'),
-                           ('alias.sync', '!bash ' + shlex.quote(str(REPO / 'scripts/git-sync.sh')))]:
+                           ('alias.sync', '!bash ' + shlex.quote(str(REPO / 'scripts/git-sync.sh')) + ' --tunning-mode=sync')]:
             execute(['git', 'config', '--file', self.env['GIT_CONFIG_GLOBAL'], key, value], env=self.env)
         self.record_push(self.remote, 'parent')
 
@@ -260,6 +260,18 @@ class SubmoduleSyncTests(GitFixture):
         self.git('remote', 'set-url', 'origin', str(self.root / 'missing.git'), cwd=child['path'])
         result = self.git('sync', check=False)
         self.assert_parent_stopped(child, result, self.initial)
+        self.assertNotIn('Agregando', result.stdout)
+
+    def test_child_ssh_authentication_failure_stops_parent_before_staging(self):
+        child = self.add_child()
+        self.change(child)
+        self.modify()
+        ssh = self.script(self.root / 'reject-ssh', '#!/bin/sh\necho "Permission denied (publickey)." >&2\nexit 255\n')
+        self.env['GIT_SSH_COMMAND'] = shlex.quote(str(ssh))
+        self.git('remote', 'set-url', 'origin', 'git@fixture.invalid:denied.git', cwd=child['path'])
+        result = self.git('sync', check=False)
+        self.assert_parent_stopped(child, result, self.initial)
+        self.assertIn('Permission denied (publickey)', result.stderr)
         self.assertNotIn('Agregando', result.stdout)
 
     def test_child_merge_conflict_prevents_parent_push(self):

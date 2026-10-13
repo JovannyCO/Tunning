@@ -23,7 +23,7 @@ Puedes invocar `setup.sh` por ruta absoluta desde cualquier directorio. Detecta 
 ~/.config/tunning/settings.sh
 ```
 
-Los comandos instalados son archivos independientes: mover o borrar el checkout no los rompe. El instalador integra un bloque en `.bashrc` y configura `git sync` en `.gitconfig`, conservando la identidad, firma y demás ajustes existentes.
+Los comandos instalados son archivos independientes: mover o borrar el checkout no los rompe. El instalador integra un bloque en `.bashrc` y configura `git sync`, `git syncPR` y `git syncPRmerge` en `.gitconfig`, conservando la identidad, firma y demás ajustes existentes.
 
 Para aplicar solo los archivos cuando ya tienes las dependencias, o inspeccionar primero los cambios:
 
@@ -111,7 +111,9 @@ git diff --stat
 git diff --cached --stat
 ```
 
-Para revisar también las ramas y los cambios propios de los submódulos ya inicializados, usa `git submodule foreach --recursive 'git status --short --branch'`. Esta revisión te permite comprobar el alcance de la publicación antes de que `git sync` agregue los archivos.
+Para revisar también las ramas y los cambios propios de los submódulos ya inicializados, usa `git submodule foreach --recursive 'git status --short --branch'`.
+Los modos `git syncPR` y `git syncPRmerge` añaden creación de PR y fusión
+condicionada. Sus requisitos y evidencias están en la [guía de PR](GIT-PR.md).
 
 ## devup
 

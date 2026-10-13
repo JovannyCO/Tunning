@@ -3,17 +3,26 @@
 set -euo pipefail
 exec python3 - "$@" <<'PY'
 import datetime
+import argparse
+import hashlib
+import json
 import os
 from pathlib import Path
 import posixpath
 import pwd
+import re
 import socket
 import subprocess
 import sys
-from urllib.parse import urlsplit, urlunsplit
+import tempfile
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 
 
 HELP = '''Uso: git sync ["mensaje"]
+     git syncPR ["mensaje"] [--issue N]
+     git syncPRmerge ["mensaje"] [--issue N]
+Los tres alias usan esta implementación. sync publica; syncPR prepara PR;
+syncPRmerge exige evidencia vigente y auditoría independiente para fusionar.
 Valida e inicializa los submódulos recursivos en sus commits registrados.
 De hijos a padres: agrega cambios, crea commits, integra mediante merge la rama
 remota y production (si existe), y publica únicamente cada rama de trabajo.
@@ -24,15 +33,34 @@ Configuración por repositorio: tunning.syncSign (true), tunning.syncProduction
 branch.<rama>.remote/pushRemote y remote.pushDefault; por defecto, origin.
 Un fallo detiene sus padres. Antes del push se comprueba la disponibilidad
 remota de las referencias hijas, también con --recurse-submodules=check.
+Los modos PR necesitan gh autenticado en github.com y una rama distinta de
+la base (tunning.prBase o rama predeterminada real). No crean ramas arbitrarias.
+Política/auditorías: tunning.prPolicy y tunning.auditReport, fuera del checkout.
+Ver docs/GIT-PR.md para evidencia, firmas, pruebas y reanudación.
 '''
+MODE = 'sync'
+if sys.argv[1:2] and sys.argv[1].startswith('--tunning-mode='):
+    MODE = sys.argv.pop(1).split('=', 1)[1]
 if sys.argv[1:2] in (['--help'], ['-h']):
     print(HELP, end='')
     sys.exit(0)
 
-MESSAGE = ' '.join(sys.argv[1:]) or 'Cambios en la matrix'
+OPTIONS = None
+if MODE != 'sync':
+    parser = argparse.ArgumentParser(description=HELP)
+    parser.add_argument('message', nargs='*')
+    parser.add_argument('--issue', type=int)
+    parser.add_argument('--repository')
+    parser.add_argument('--pr', type=int)
+    parser.add_argument('--record', type=Path)
+    parser.add_argument('--run', type=int)
+    OPTIONS = parser.parse_args()
+MESSAGE = ' '.join(OPTIONS.message if OPTIONS else sys.argv[1:]) or 'Cambios en la matrix'
 ROOT = None
 REPOS = {}
 PUBLISHED = {}
+PRS = {}
+MERGED = {}
 
 
 class SyncError(Exception):
@@ -149,6 +177,253 @@ def absolute_url(parent, url):
     return str((parent.path / base / url).resolve())
 
 
+def canonical(data):
+    return json.dumps(data, sort_keys=True, ensure_ascii=True, separators=(',', ':')).encode()
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+class GitHub:
+    """CLI autenticada; todos los datos se pasan como argumentos o JSON stdin."""
+    def __init__(self, path, repository):
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):
+            fail(path, 'Nombre de repositorio GitHub inválido.')
+        self.path, self.repository = path, repository
+        self.prefix = f'repos/{repository}'
+
+    def api(self, endpoint='', method='GET', data=None):
+        args = ['gh', 'api', '--hostname', 'github.com', '--method', method,
+                self.prefix + ('/' + endpoint if endpoint else '')]
+        if data is not None:
+            args += ['--input', '-']
+        result = subprocess.run(args, cwd=self.path, input=json.dumps(data) if data is not None else None,
+                                capture_output=True, text=True,
+                                env={**os.environ, 'GH_PROMPT_DISABLED': '1'})
+        if result.returncode:
+            # No imprimir respuestas/headers que puedan contener credenciales.
+            fail(self.path, f'GitHub {method} {endpoint or self.repository} falló; revisa gh auth status y permisos (código {result.returncode}).')
+        try:
+            return json.loads(result.stdout) if result.stdout.strip() else None
+        except ValueError:
+            fail(self.path, 'Respuesta JSON inválida de GitHub.')
+
+    def pages(self, endpoint, key=None):
+        found = []
+        for page in range(1, 1001):
+            data = self.api(endpoint + ('&' if '?' in endpoint else '?') + f'per_page=100&page={page}')
+            batch = data[key] if key else data
+            if not isinstance(batch, list):
+                fail(self.path, f'Lista inválida de GitHub: {endpoint}.')
+            found.extend(batch)
+            if len(batch) < 100:
+                return found
+        fail(self.path, 'La consulta GitHub excede el límite de paginación; no se asume una lista completa.')
+
+    def branch_sha(self, branch):
+        return self.api('git/ref/heads/' + quote(branch, safe=''))['object']['sha']
+
+
+def github_name(path, remote):
+    # La configuración cruda identifica GitHub incluso si Git aplica insteadOf.
+    url = value(path, f'remote.{remote}.pushurl') or value(path, f'remote.{remote}.url') or ''
+    matched = re.fullmatch(r'(?:git@github\.com:|https://github\.com/|ssh://git@github\.com/)([^/]+/[^/]+?)(?:\.git)?/?', url)
+    if not matched:
+        fail(path, f'El remoto {remote!r} no identifica inequívocamente un repositorio en github.com.')
+    return matched[1]
+
+
+def criteria(body, path):
+    match = re.search(r'^## Criterios de aceptación\s*\n(.*?)(?=^## |\Z)', body or '', re.M | re.S)
+    rows = re.findall(r'^- \[([ xX])\] (.+)$', match[1], re.M) if match else []
+    if not rows:
+        fail(path, 'El issue no tiene una sección de Criterios de aceptación con casillas.')
+    # La explicación de verificación puede cambiar; el criterio sigue siendo el mismo.
+    return [(f'A{i}', checked.lower() == 'x', text.split(' — ', 1)[0].strip())
+            for i, (checked, text) in enumerate(rows, 1)]
+
+
+def proof_from(body, path):
+    blocks = re.findall(r'^```tunning-evidence\s*\n(.*?)^```\s*$', body or '', re.M | re.S)
+    if len(blocks) != 1:
+        fail(path, 'Falta un único bloque tunning-evidence en el issue; un push no demuestra sus criterios.')
+    try:
+        return json.loads(blocks[0])
+    except ValueError:
+        fail(path, 'El bloque tunning-evidence no contiene JSON válido.')
+
+
+def successful_run(gh, run_id, sha, workflow):
+    run = gh.api(f'actions/runs/{int(run_id)}')
+    if (run.get('head_sha') != sha or run.get('status') != 'completed' or
+            run.get('conclusion') != 'success' or run.get('path', '').split('@', 1)[0] != workflow):
+        fail(gh.path, f'CI {run_id} no acredita {workflow} con éxito para el SHA {sha}.')
+    return run
+
+
+def check_criteria(gh, pr, issue_number, workflow='.github/workflows/tests.yml'):
+    issue = gh.api(f'issues/{int(issue_number)}')
+    rows = criteria(issue.get('body'), gh.path)
+    pending = [number for number, done, _ in rows if not done]
+    if pending:
+        fail(gh.path, f'Issue #{issue_number}: criterios pendientes: {", ".join(pending)}.')
+    proof = proof_from(issue.get('body'), gh.path)
+    expected = {'schema': 1, 'repository': gh.repository, 'sha': pr['head']['sha'],
+                'base_sha': pr['base']['sha'], 'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows]))}
+    if any(proof.get(key) != val for key, val in expected.items()):
+        fail(gh.path, f'Issue #{issue_number}: evidencia obsoleta o de otro PR/base/criterio.')
+    entries = proof.get('criteria', [])
+    if (not isinstance(entries, list) or len(entries) != len(rows) or
+            {e.get('id') for e in entries if isinstance(e, dict)} != {n for n, _, _ in rows}):
+        fail(gh.path, 'La evidencia no cubre exactamente todos los criterios.')
+    runs = set()
+    for entry in entries:
+        if not isinstance(entry.get('detail'), str) or not entry['detail'].strip() or not isinstance(entry.get('run'), int):
+            fail(gh.path, f'Evidencia incompleta para {entry.get("id")}.')
+        runs.add(entry['run'])
+    for run_id in runs:
+        successful_run(gh, run_id, pr['head']['sha'], workflow)
+    return proof
+
+
+def issue_for_pr(gh, pr):
+    body = pr.get('body') or ''
+    # Solo directivas completas, fuera de bloques de código y comentarios HTML.
+    prose = re.sub(r'(?ms)^```.*?^```\s*$|<!--.*?-->', '', body)
+    issues = set(re.findall(r'^Closes #(\d+)\s*$', prose, re.M | re.I))
+    if len(issues) != 1:
+        fail(gh.path, 'El PR necesita una única línea Closes #N con su issue de criterios.')
+    return int(issues.pop())
+
+
+def criteria_command():
+    if not OPTIONS.repository or not OPTIONS.pr:
+        fail(Path.cwd(), 'Usa --repository owner/repo --pr N.')
+    gh = GitHub(Path.cwd(), OPTIONS.repository)
+    pr = gh.api(f'pulls/{OPTIONS.pr}')
+    issue_number = issue_for_pr(gh, pr)
+    if OPTIONS.record:
+        if not OPTIONS.run:
+            fail(gh.path, '--record necesita --run con CI ya aprobado para el SHA vigente.')
+        successful_run(gh, OPTIONS.run, pr['head']['sha'], '.github/workflows/tests.yml')
+        issue = gh.api(f'issues/{issue_number}')
+        rows = criteria(issue.get('body'), gh.path)
+        entries = json.loads(OPTIONS.record.read_text())
+        if (not isinstance(entries, list) or len(entries) != len(rows) or
+                {e.get('id') for e in entries if isinstance(e, dict)} != {n for n, _, _ in rows} or
+                any(not isinstance(e.get('detail'), str) or not e['detail'].strip() for e in entries)):
+            fail(gh.path, '--record exige una explicación verificable para cada criterio; no se deduce del push.')
+        proof = {'schema': 1, 'repository': gh.repository, 'sha': pr['head']['sha'],
+                 'base_sha': pr['base']['sha'], 'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows])),
+                 'criteria': [dict(e, run=OPTIONS.run) for e in entries]}
+        body = re.sub(r'(?ms)^```tunning-evidence\s*\n.*?^```\s*$', '', issue['body']).rstrip()
+        section = re.search(r'^## Criterios de aceptación\s*\n(.*?)(?=^## |\Z)', body, re.M | re.S)
+        checked = re.sub(r'^- \[[ xX]\]', '- [x]', section[1], flags=re.M)
+        body = body[:section.start(1)] + checked + body[section.end(1):]
+        body += '\n\n```tunning-evidence\n' + json.dumps(proof, ensure_ascii=False, indent=2) + '\n```\n'
+        gh.api(f'issues/{issue_number}', 'PATCH', {'body': body})
+    check_criteria(gh, pr, issue_number)
+    print(f'Criterios y evidencia OK: {gh.repository} PR #{OPTIONS.pr}, issue #{issue_number}, {pr["head"]["sha"]}.')
+
+
+def state_path(repo):
+    common = git(repo.path, 'rev-parse', '--git-common-dir').stdout.removesuffix('\n')
+    return (repo.path / common).resolve() / 'tunning-sync' / 'state.json'
+
+
+def read_state(repo):
+    path = state_path(repo)
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def save_state(repo, data):
+    path = state_path(repo)
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as tmp:
+        json.dump(data, tmp, ensure_ascii=True, indent=2)
+        temporary = Path(tmp.name)
+    os.replace(temporary, path)
+
+
+def pr_prepare(repo):
+    repo.github = GitHub(repo.path, github_name(repo.path, repo.push_remote))
+    metadata = repo.github.api()
+    if metadata.get('archived') or not metadata.get('permissions', {}).get('push'):
+        fail(repo.path, 'GitHub no permite publicar en este repositorio (sin permiso push o archivado).')
+    repo.base = value(repo.path, 'tunning.prBase') or metadata['default_branch']
+    repo.default_base = metadata['default_branch']
+    git(repo.path, 'check-ref-format', f'refs/heads/{repo.base}')
+    if repo.branch == repo.base or repo.branch == repo.default_base:
+        fail(repo.path, f'La rama {repo.branch!r} es principal/base; prepara explícitamente una rama con git switch -c antes de syncPR.')
+    repo.base_sha = repo.github.branch_sha(repo.base)
+    repo.metadata = metadata
+    issue = OPTIONS.issue if repo.path == ROOT and OPTIONS.issue else value(repo.path, 'tunning.issue')
+    repo.issue = int(issue) if issue else None
+    if repo.issue:
+        existing = repo.github.api(f'issues/{repo.issue}')
+        if existing.get('pull_request') or existing.get('state') != 'open':
+            fail(repo.path, f'Issue #{repo.issue} no es un issue abierto.')
+        criteria(existing.get('body'), repo.path)
+
+
+def pr_publish(repo):
+    gh = repo.github
+    sha = head(repo.path)
+    repo.base_sha = gh.branch_sha(repo.base)
+    comparison = gh.api('compare/' + quote(repo.base_sha, safe='') + '...' + quote(sha, safe=''))
+    if not comparison.get('ahead_by') or not comparison.get('files'):
+        print(f'=> [{label(repo.path)}] Sin diferencias con {repo.base}; no se crea PR.', flush=True)
+        return
+    query = urlencode({'state': 'open', 'head': gh.repository.split('/')[0] + ':' + repo.branch, 'base': repo.base})
+    existing = gh.pages('pulls?' + query)
+    if len(existing) > 1:
+        fail(repo.path, 'Hay varios PR abiertos para la misma rama/base; resuelve la ambigüedad.')
+    if existing:
+        existing = existing[0]
+        if repo.issue is None:
+            repo.issue = issue_for_pr(gh, existing)
+        elif issue_for_pr(gh, existing) != repo.issue:
+            fail(repo.path, 'El PR existente está asociado a otro issue; no se reemplaza esa asociación.')
+    if repo.issue is None:
+        marker = '<!-- tunning-branch:' + digest(canonical([repo.branch, repo.base])) + ' -->'
+        matches = [i for i in gh.pages('issues?state=open') if not i.get('pull_request') and marker in (i.get('body') or '')]
+        if len(matches) > 1:
+            fail(repo.path, 'Hay varios issues para la rama/base; configura tunning.issue.')
+        issue = matches[0] if matches else gh.api('issues', 'POST', {
+            'title': f'Sincronizar {repo.branch} hacia {repo.base}',
+            'body': marker + '\n\n## Criterios de aceptación\n\n- [ ] Pruebas acordadas aprobadas para el SHA vigente.\n- [ ] Cambios y referencias hijas revisados sin hallazgos pendientes.\n'})
+        repo.issue = issue['number']
+    children = [{'path': path, 'repository': child.github.repository, 'sha': head(child.path),
+                 'pr': PRS.get(child.path, {}).get('number')} for path, _, _, _, child in repo.children]
+    block = '<!-- tunning-sync:start -->\n' + f'Rama `{repo.branch}` → `{repo.base}`; SHA `{sha}`.\n\n'
+    block += f'Closes #{repo.issue}\n\n'
+    block += 'Dependencias hijas: ' + (json.dumps(children, ensure_ascii=True) if children else 'ninguna')
+    block += '\n\nLos criterios, CI y la auditoría deben corresponder a este SHA y base.\n<!-- tunning-sync:end -->'
+    if existing:
+        body = existing.get('body') or ''
+        # Conservar la descripción humana y su única referencia de cierre.
+        block = block.replace(f'Closes #{repo.issue}\n\n', '')
+        body = re.sub(r'<!-- tunning-sync:start -->.*?<!-- tunning-sync:end -->', '', body, flags=re.S).rstrip()
+        if not re.search(rf'^Closes #{repo.issue}\s*$', body, re.M | re.I):
+            body += f'\n\nCloses #{repo.issue}'
+        pr = gh.api(f'pulls/{existing["number"]}', 'PATCH', {'body': body + '\n\n' + block})
+    else:
+        pr = gh.api('pulls', 'POST', {'head': repo.branch, 'base': repo.base,
+                                    'title': f'Sincronizar {repo.branch}', 'body': block, 'draft': True})
+    PRS[repo.path] = pr
+    state = read_state(repo)
+    state.update({'schema': 1, 'path': str(repo.path), 'repository': gh.repository, 'branch': repo.branch,
+                  'base': repo.base, 'sha': sha, 'base_sha': repo.base_sha, 'issue': repo.issue,
+                  'pr': pr['number'], 'children': children,
+                  'implementer': {'provider': value(repo.path, 'tunning.implementerProvider'),
+                                  'session': value(repo.path, 'tunning.implementerSession'),
+                                  'identity': git(repo.path, 'log', '-1', '--format=%an <%ae>').stdout.strip()}})
+    # No reciclar la aprobación de otro SHA/base, aunque quede un informe en disco.
+    state.pop('audit', None)
+    save_state(repo, state)
+
+
 class Repo:
     def __init__(self, path):
         self.path = path
@@ -209,6 +484,8 @@ class Repo:
                 self.branch_tip = tip.stdout.strip()
                 self.common_history(self.branch_tip)
         links(self.path)  # Valida conflictos del índice antes de crear commits.
+        if MODE in ('syncPR', 'syncPRmerge'):
+            pr_prepare(self)
 
     def common_history(self, oid):
         if git(self.path, 'merge-base', 'HEAD', oid, codes=(0, 1)).returncode == 1:
@@ -362,6 +639,166 @@ def clean(repo):
         fail(repo.path, f'Quedan cambios después de sincronizar.\n{status}')
 
 
+def external_path(repo, filename, purpose):
+    path = Path(filename).expanduser().resolve()
+    common = state_path(repo).parent.parent
+    if path.is_relative_to(repo.path) or path.is_relative_to(common):
+        fail(repo.path, f'{purpose} debe estar fuera del checkout y de su directorio Git.')
+    return path
+
+
+def audit_policy(repo):
+    name = value(repo.path, 'tunning.prPolicy')
+    if not name:
+        fail(repo.path, 'Falta tunning.prPolicy: política externa de pruebas, checks e identidades auditoras.')
+    path = external_path(repo, name, 'La política de auditoría')
+    if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o022:
+        fail(repo.path, 'La política debe pertenecer al usuario y no admitir escritura de grupo/otros.')
+    raw = path.read_bytes()
+    policy = json.loads(raw)
+    commands = policy.get('commands')
+    if (not isinstance(commands, list) or not commands or
+            any(not isinstance(c, list) or not c or any(not isinstance(a, str) or not a for a in c) for c in commands)):
+        fail(repo.path, 'La política debe acordar comandos de prueba como arrays de argumentos.')
+    if not policy.get('checks') or not policy.get('auditors'):
+        fail(repo.path, 'La política necesita checks e identidades/fingerprints de auditores autorizados.')
+    policy['_sha256'] = digest(raw)
+    return policy
+
+
+def verified_audit(repo, pr, policy):
+    filename = value(repo.path, 'tunning.auditReport')
+    if not filename:
+        fail(repo.path, 'Falta tunning.auditReport: se requiere auditoría independiente firmada para este SHA.')
+    report_path = external_path(repo, filename, 'El informe')
+    signature = Path(str(report_path) + '.asc')
+    result = subprocess.run(['gpg', '--batch', '--no-auto-key-retrieve', '--status-fd=1',
+                             '--verify', str(signature), str(report_path)], capture_output=True, text=True)
+    valid = [line.split()[2:] for line in result.stdout.splitlines() if line.startswith('[GNUPG:] VALIDSIG ')]
+    bad = any('[GNUPG:] ' + token in result.stdout for token in ('EXPKEYSIG', 'EXPSIG', 'REVKEYSIG', 'BADSIG', 'ERRSIG'))
+    if result.returncode or bad or len(valid) != 1:
+        fail(repo.path, 'Firma de auditoría inválida, expirada o revocada; no se importan claves del informe.')
+    fingerprint = valid[0][-1] if len(valid[0]) >= 10 else valid[0][0]
+    identity = policy['auditors'].get(fingerprint)
+    if not identity:
+        fail(repo.path, 'El firmante no está autorizado por la política local de auditoría.')
+    report = json.loads(report_path.read_text())
+    expected = {'schema': 1, 'repository': repo.github.repository, 'sha': head(repo.path),
+                'base_sha': pr['base']['sha'], 'children': links(repo.path, committed=True),
+                'pr': pr['number'], 'issue': repo.issue, 'policy_sha256': policy['_sha256']}
+    if any(report.get(key) != val for key, val in expected.items()):
+        fail(repo.path, 'Auditoría obsoleta: cambió SHA, base, hijos, PR, issue o política.')
+    auditor = report.get('auditor', {})
+    implementer = read_state(repo).get('implementer', {})
+    if (not implementer.get('provider') or not implementer.get('session') or
+            auditor.get('provider') != identity.get('provider') or auditor.get('identity') != identity.get('identity') or
+            not auditor.get('session') or not auditor.get('environment') or
+            auditor.get('provider') == implementer['provider'] or auditor.get('session') == implementer['session']):
+        fail(repo.path, 'Se necesita un auditor autorizado de otro proveedor y sesión independiente.')
+    if report.get('implementer') != implementer:
+        fail(repo.path, 'La identidad del implementador no coincide con el manifiesto vigente.')
+    results = report.get('tests', [])
+    if ([t.get('argv') for t in results] != policy['commands'] or
+            any(t.get('returncode') != 0 or not re.fullmatch(r'[a-f0-9]{64}', t.get('log_sha256', '')) for t in results) or
+            report.get('findings') != [] or report.get('unchanged') is not True):
+        fail(repo.path, 'Auditoría con hallazgos, cambios de código o suites incompletas/fallidas.')
+    return {'fingerprint': fingerprint, 'report_sha256': digest(report_path.read_bytes()), 'report': report}
+
+
+def merge_checks(repo, pr, policy):
+    gh = repo.github
+    if pr.get('draft') or pr.get('mergeable') is not True or pr.get('mergeable_state') not in ('clean', 'unstable', 'has_hooks'):
+        fail(repo.path, 'PR borrador, con conflicto o estado de integración sin resolver.')
+    checks = gh.pages(f'commits/{pr["head"]["sha"]}/check-runs?filter=latest', 'check_runs')
+    statuses = gh.api(f'commits/{pr["head"]["sha"]}/status').get('statuses', [])
+    latest = {}
+    for status in statuses:
+        latest.setdefault(status['context'], status['state'])
+    observed = {c['name']: c.get('conclusion') if c.get('status') == 'completed' else 'pending' for c in checks}
+    observed.update(latest)
+    if not observed or any(s != 'success' for s in observed.values()):
+        fail(repo.path, 'Checks pendientes, fallidos, omitidos o ausentes; no se fusiona.')
+    missing = set(policy['checks']) - set(observed)
+    if missing:
+        fail(repo.path, 'Faltan checks acordados: ' + ', '.join(sorted(missing)))
+    reviews = gh.pages(f'pulls/{pr["number"]}/reviews')
+    by_user = {}
+    for review in reviews:
+        if review.get('state') in ('APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'):
+            by_user[review['user']['login']] = review
+    if any(r['state'] == 'CHANGES_REQUESTED' for r in by_user.values()):
+        fail(repo.path, 'Hay una revisión de GitHub que solicita cambios.')
+    approved = {u for u, r in by_user.items() if r['state'] == 'APPROVED' and
+                r.get('commit_id') == pr['head']['sha'] and u != pr.get('user', {}).get('login')}
+    if not set(policy.get('reviewers', [])) <= approved:
+        fail(repo.path, 'Faltan revisiones acordadas sobre el SHA actual.')
+    # GitHub aplica también protecciones/rulesets, equipos y CODEOWNERS en el
+    # endpoint de merge normal; nunca se solicita admin override.
+
+
+def merge_tree(repo):
+    for _, _, _, _, child in repo.children:
+        merge_tree(child)
+    current_links = links(repo.path, committed=True)
+    if any(current_links.get(path) != head(child.path) for path, _, _, _, child in repo.children):
+        sync(repo)
+        fail(repo.path, 'Las fusiones hijas cambiaron referencias: nuevo commit padre publicado; necesita nuevas pruebas y auditoría antes de fusionar.')
+    state = read_state(repo)
+    receipt = state.get('merged')
+    if repo.path not in PRS:
+        if receipt:
+            merged = repo.github.api(f'pulls/{receipt["pr"]}')
+            if not merged.get('merged') or merged.get('merge_commit_sha') != receipt['sha']:
+                fail(repo.path, 'El progreso guardado no coincide con una fusión real en GitHub.')
+            MERGED[repo.path] = receipt
+        return
+    gh = repo.github
+    pr = gh.api(f'pulls/{PRS[repo.path]["number"]}')
+    if pr.get('merged'):
+        fail(repo.path, 'El PR ya fue fusionado fuera de esta ejecución; vuelve a sincronizar y validar su resultado.')
+    if pr['head']['sha'] != head(repo.path) or pr['base']['ref'] != repo.base:
+        fail(repo.path, 'El PR cambió de SHA/base después de publicarlo.')
+    policy = audit_policy(repo)
+    proof = check_criteria(gh, pr, repo.issue, policy.get('workflow', '.github/workflows/tests.yml'))
+    audit = verified_audit(repo, pr, policy)
+    if audit['report'].get('criteria_sha256') != proof['criteria_sha256']:
+        fail(repo.path, 'La auditoría no cubre los criterios vigentes del issue.')
+    merge_checks(repo, pr, policy)
+    method = policy.get('merge_method', 'merge')
+    allowed_key = 'allow_merge_commit' if method == 'merge' else f'allow_{method}_merge'
+    if method not in ('merge', 'squash', 'rebase') or not repo.metadata.get(allowed_key):
+        fail(repo.path, f'Método de merge {method!r} no permitido por la política o GitHub.')
+    if repo.path != ROOT and method != 'merge':
+        fail(repo.path, 'Squash/rebase de un hijo requiere actualización manual del implementador y nueva auditoría del padre; el modo automático conserva su historia con merge.')
+    clean(repo)
+    fresh = gh.api(f'pulls/{pr["number"]}')
+    remote = heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}', f'refs/heads/{repo.base}')
+    if (fresh['head']['sha'] != pr['head']['sha'] or fresh['base']['sha'] != pr['base']['sha'] or
+            remote.get(f'refs/heads/{repo.branch}') != pr['head']['sha'] or
+            remote.get(f'refs/heads/{repo.base}') != pr['base']['sha'] or head(repo.path) != pr['head']['sha'] or
+            links(repo.path, committed=True) != audit['report']['children']):
+        fail(repo.path, 'HEAD/base/referencias cambiaron justo antes de fusionar; evidencia invalidada.')
+    result = gh.api(f'pulls/{pr["number"]}/merge', 'PUT', {'sha': pr['head']['sha'], 'merge_method': method})
+    if not result.get('merged') or not result.get('sha'):
+        fail(repo.path, 'GitHub rechazó la fusión; los ancestros se detienen.')
+    receipt = {'pr': pr['number'], 'sha': result['sha'], 'head_sha': pr['head']['sha'], 'base_sha': pr['base']['sha']}
+    state['merged'], state['audit'] = receipt, audit
+    save_state(repo, state)  # La fusión remota no se deshace si falla un paso posterior.
+    MERGED[repo.path] = receipt
+    repo.ensure_commit(result['sha'], repo.push_url)
+    if method == 'merge':
+        parents = git(repo.path, 'log', '-1', '--format=%P', result['sha']).stdout.split()
+        if parents != [pr['base']['sha'], pr['head']['sha']]:
+            fail(repo.path, 'La base cambió durante la fusión remota; se guardó el resultado, pero se detienen sus padres.')
+        git(repo.path, 'merge', '--ff-only', '--no-recurse-submodules', result['sha'], stream=True)
+        git(repo.path, 'push', '--recurse-submodules=check', '--', repo.push_remote,
+            f'HEAD:refs/heads/{repo.branch}', stream=True)
+        if heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') != head(repo.path):
+            fail(repo.path, 'La rama de trabajo no coincide con su publicación tras integrar la fusión.')
+        PUBLISHED[repo.path] = (head(repo.path), repo.push_remote, repo.branch)
+    # Squash/rebase raíz conserva la rama original y sus commits publicados.
+
+
 def sync(repo, recorded=None):
     for _, _, oid, _, child in repo.children:
         sync(child, oid)
@@ -377,6 +814,11 @@ def sync(repo, recorded=None):
     if repo.production and 'refs/heads/production' in repo.remote_heads and repo.branch != 'production':
         integrate(repo, ['pull', '--no-rebase', '--no-edit', '--no-autostash', '--no-recurse-submodules',
                          *repo.sign, '--', repo.remote, 'production'], f'{repo.remote}/production')
+    if MODE in ('syncPR', 'syncPRmerge'):
+        base_sha = repo.github.branch_sha(repo.base)
+        repo.ensure_commit(base_sha, repo.push_url)
+        if not ancestor(repo.path, base_sha, head(repo.path)):
+            integrate(repo, ['merge', '--no-edit', '--no-autostash', *repo.sign, base_sha], f'base PR {repo.base}')
     # Los hooks también pueden cambiar .gitmodules durante un commit. La URL
     # que se va a publicar debe ser la misma que se haya validado, sin cachés.
     if module_contents(repo.path) != repo.modules:
@@ -407,6 +849,8 @@ def sync(repo, recorded=None):
         fail(repo.path, 'El HEAD local y la rama publicada no coinciden después del push.')
     clean(repo)
     PUBLISHED[repo.path] = (expected, repo.push_remote, repo.branch)
+    if MODE in ('syncPR', 'syncPRmerge'):
+        pr_publish(repo)
 
 
 def summary(title):
@@ -414,20 +858,32 @@ def summary(title):
     for path, (oid, remote, branch) in PUBLISHED.items():
         created = ', '.join(commit[:12] for commit in REPOS[path].created) or 'ninguno'
         print(f'  [{label(path)}] {remote}/{branch} -> {oid[:12]}; commits creados: {created}', flush=True)
+        if path in PRS:
+            repo = REPOS[path]
+            print(f'    base: {repo.base}; issue #{repo.issue}; PR {PRS[path]["html_url"]}', flush=True)
+    for path, receipt in MERGED.items():
+        print(f'  [{label(path)}] PR #{receipt["pr"]} fusionado: {receipt["sha"]}; progreso guardado.', flush=True)
 
 
 try:
+    if MODE == 'criteria':
+        criteria_command()
+        sys.exit(0)
+    if MODE not in ('sync', 'syncPR', 'syncPRmerge'):
+        fail(Path.cwd(), f'Modo desconocido: {MODE}.')
     ROOT = Path(git(Path.cwd(), 'rev-parse', '--show-toplevel').stdout.removesuffix('\n')).resolve()
     print('=> Validando repositorios y submódulos antes de confirmar cambios...', flush=True)
     root = prepare(ROOT)
     sync(root)
+    if MODE == 'syncPRmerge':
+        merge_tree(root)
     for path, (oid, _, _) in PUBLISHED.items():
         if head(path) != oid:
             fail(path, 'HEAD cambió después de la publicación.')
         clean(REPOS[path])
     summary(f'Sincronizados {len(PUBLISHED)} repositorios:')
-except (SyncError, OSError) as error:
-    print(f'git sync: {error}', file=sys.stderr, flush=True)
+except (SyncError, OSError, ValueError, KeyError, TypeError) as error:
+    print(f'git {MODE}: {error}', file=sys.stderr, flush=True)
     if PUBLISHED:
         summary('Publicaciones completadas antes del error (sincronización incompleta):')
     sys.exit(1)

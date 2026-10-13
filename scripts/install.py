@@ -83,7 +83,10 @@ def gitconfig_contents(original, binary, profile):
     with tempfile.TemporaryDirectory(prefix='tunning-gitconfig-') as tmp:
         config = Path(tmp) / 'config'
         config.write_bytes(original)
-        run('git', 'config', '--file', str(config), 'alias.sync', '!' + shlex.quote(str(binary)))
+        command = '!' + shlex.quote(str(binary))
+        for alias in ('sync', 'syncPR', 'syncPRmerge'):
+            run('git', 'config', '--file', str(config), f'alias.{alias}',
+                command + f' --tunning-mode={alias}')
         current = subprocess.run(['git', 'config', '--file', str(config), '--get', 'tunning.syncSign'],
                                  capture_output=True, text=True)
         if current.returncode == 1:
