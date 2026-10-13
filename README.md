@@ -36,12 +36,13 @@ Cada actualización guarda los archivos reemplazados bajo `~/.local/state/tunnin
 
 ## Apariencia y teclado
 
-El prompt Bash conserva los colores y la distribución actuales: usuario/host en naranja, directorio en gris, rama Git en teal, reloj a la derecha y `╰ ❯` en la segunda línea. La flecha cambia de verde a rojo cuando falla un comando.
+El prompt Bash muestra usuario/host en naranja, directorio en azul cian sobre gris, rama Git en teal, reloj a la derecha y `╰ ❯` en la segunda línea. La flecha cambia de verde a rojo cuando falla un comando.
 
 | Rol | Color |
 |---|---|
 | Primario | `#FF6D00` |
 | Secundario | `#00897B` |
+| Terciario (azul cian) | `#02BCF9` |
 | Superficie | `#1C1B1F` |
 | Superficie variante | `#2B2930` |
 

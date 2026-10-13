@@ -35,7 +35,7 @@ __build_ps1() {
     local dfg=$(__fg  43  41  48) dbg=$(__bg  43  41  48)
     local tfg=$(__fg   0 137 123) tbg=$(__bg   0 137 123)
     local ffg=$(__fg  73  69  79) kfg=$(__fg  28  27  31)
-    local bfg=$(__fg 130 170 255) wfg=$(__fg 255 255 255)
+    local tertiary_fg=$(__fg 2 188 249) wfg=$(__fg 255 255 255)
     local yfg=$(__fg 255 215  64) gfg=$(__fg 105 240 174)
     local efg=$(__fg 207 102 121)
 
@@ -48,7 +48,7 @@ __build_ps1() {
     local L="${ofg}${CL}${R}${obg}${kfg}${B}  ${chroot}${user}@${host} ${R}"
 
     # Dark capsule
-    L+="${ofg}${CR}${R} ${dfg}${CL}${R}${dbg}${bfg}${B} 󰉋 ${dir} ${R}"
+    L+="${ofg}${CR}${R} ${dfg}${CL}${R}${dbg}${tertiary_fg}${B} 󰉋 ${dir} ${R}"
 
     # Teal capsule (git, conditional)
     local gi; gi=$(__git_ps1_md3 2>/dev/null) || gi=''

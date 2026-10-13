@@ -44,7 +44,7 @@ format = "[@CSE ](bg:#FF6D00 fg:#1C1B1F bold)"
 
 [directory]
 format = "[ $path$read_only ]($style)"
-style = "bg:#2B2930 fg:#82AAFF bold"
+style = "bg:#2B2930 fg:#02BCF9 bold"
 truncation_length = 4
 truncate_to_repo = true
 read_only = " ro"
@@ -108,4 +108,4 @@ time_format  = "%H:%M:%S"
 [character]
 success_symbol  = "[❯](bold #69F0AE)"
 error_symbol    = "[❯](bold #CF6679)"
-vimcmd_symbol   = "[❮](bold #82AAFF)"
+vimcmd_symbol   = "[❮](bold #02BCF9)"
