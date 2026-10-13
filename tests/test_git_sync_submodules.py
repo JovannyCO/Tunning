@@ -13,7 +13,7 @@ class SubmoduleSyncTests(GitFixture):
         for key, value in [('user.name', 'Audit'), ('user.email', 'audit@example.invalid'),
                            ('commit.gpgsign', 'false'), ('tunning.syncSign', 'false'),
                            ('protocol.file.allow', 'always'),
-                           ('alias.sync', '!bash ' + shlex.quote(str(REPO / 'scripts/git-sync.sh')))]:
+                           ('alias.sync', '!bash ' + shlex.quote(str(REPO / 'scripts/git-sync.sh')) + ' --tunning-mode=sync')]:
             execute(['git', 'config', '--file', self.env['GIT_CONFIG_GLOBAL'], key, value], env=self.env)
         self.record_push(self.remote, 'parent')
 
