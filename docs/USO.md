@@ -103,6 +103,16 @@ Puedes clonar este repositorio público por HTTPS para preparar una terminal sin
 
 `git sync` publica todos los archivos no ignorados de cada repositorio. Mantén credenciales, claves privadas y archivos `.env` fuera del control de versiones; `.gitignore` no protege archivos que ya están versionados. La firma verifica la autoría e integridad, pero no cifra los archivos. Consulta la [guía de GitHub para evitar publicar datos sensibles](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository#avoiding-accidental-commits-in-the-future).
 
+Antes de sincronizar, revisa los archivos pendientes y el resumen de los cambios:
+
+```bash
+git status --short --ignore-submodules=none
+git diff --stat
+git diff --cached --stat
+```
+
+Para revisar también las ramas y los cambios propios de los submódulos ya inicializados, usa `git submodule foreach --recursive 'git status --short --branch'`. Esta revisión te permite comprobar el alcance de la publicación antes de que `git sync` agregue los archivos.
+
 ## devup
 
 [Scripts de actualización](../scripts/devup.sh) recuperados de la copia de trabajo y compartidos por ambos entornos:
