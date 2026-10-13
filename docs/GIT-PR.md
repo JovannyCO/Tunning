@@ -26,6 +26,10 @@ Sin `--issue`/`tunning.issue`, reutiliza el issue de la rama/base o crea uno
 con criterios pendientes. Reutiliza el PR abierto, conserva su descripción,
 publica las dependencias hijas y omite PR sin diferencias. Ni publicar ni
 pasar tests permite inferir que se cumplió cada requisito escrito en un issue.
+El responsable predeterminado es el propietario del repositorio. En los
+proyectos de JovannyCO, los issues y PR se asignan a JovannyCO. Puedes fijarlo
+con `git config --global tunning.responsible JovannyCO`; se añaden asignaciones
+sin retirar otros responsables y se comprueba que GitHub permita asignarlo.
 
 ## Criterios con evidencia
 
@@ -123,10 +127,11 @@ El progreso se guarda por repositorio en el directorio Git, en
 los ancestros, conserva las fusiones completadas y permite reanudar.
 Un merge hijo suele crear otro commit; el implementador publica la referencia
 actualizada del padre y se detiene para nuevas pruebas y auditoría del nuevo SHA.
-El modo automático usa merge en los hijos para avanzar sus ramas sin perder
-historia. Squash/rebase de hijos requieren actualización manual del
-implementador y nueva auditoría; se rechazan antes de fusionar automáticamente.
-En la raíz esos métodos conservan la rama de trabajo y sus commits publicados.
+Merge avanza la rama hija sin perder historia. Para squash/rebase, el motor
+comprueba el árbol resultante e integra ese resultado en la rama activa con
+un merge firmado, conservando los commits originales y publicándolo. El padre
+referencia ese nuevo HEAD publicado, que contiene el resultado fusionado, y
+necesita nueva evidencia/auditoría. Rebase exige historia lineal en el PR.
 
 La API condiciona el HEAD, pero no ofrece una comparación atómica del SHA base:
 si la base cambia durante la petición, se detecta al revisar los padres del

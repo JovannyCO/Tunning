@@ -365,11 +365,18 @@ def pr_prepare(repo):
         fail(repo.path, f'La rama {repo.branch!r} es principal/base; prepara explícitamente una rama con git switch -c antes de syncPR.')
     repo.base_sha = repo.github.branch_sha(repo.base)
     repo.metadata = metadata
+    repo.responsible = value(repo.path, 'tunning.responsible') or repo.github.repository.split('/')[0]
+    if not re.fullmatch(r'[A-Za-z0-9-]+', repo.responsible):
+        fail(repo.path, 'tunning.responsible debe ser un login de GitHub válido.')
+    repo.github.api('assignees/' + repo.responsible)
     issue = OPTIONS.issue if repo.path == ROOT and OPTIONS.issue else value(repo.path, 'tunning.issue')
     repo.issue = int(issue) if issue else None
     if repo.issue:
         existing = repo.github.api(f'issues/{repo.issue}')
-        if existing.get('pull_request') or existing.get('state') != 'open':
+        receipt = read_state(repo).get('merged')
+        resumed = (receipt and read_state(repo).get('issue') == repo.issue and
+                   repo.github.api(f'pulls/{receipt["pr"]}').get('merged'))
+        if existing.get('pull_request') or (existing.get('state') != 'open' and not resumed):
             fail(repo.path, f'Issue #{repo.issue} no es un issue abierto.')
         criteria(existing.get('body'), repo.path)
 
@@ -399,8 +406,10 @@ def pr_publish(repo):
             fail(repo.path, 'Hay varios issues para la rama/base; configura tunning.issue.')
         issue = matches[0] if matches else gh.api('issues', 'POST', {
             'title': f'Sincronizar {repo.branch} hacia {repo.base}',
+            'assignees': [repo.responsible],
             'body': marker + '\n\n## Criterios de aceptación\n\n- [ ] Pruebas acordadas aprobadas para el SHA vigente.\n- [ ] Cambios y referencias hijas revisados sin hallazgos pendientes.\n'})
         repo.issue = issue['number']
+    gh.api(f'issues/{repo.issue}/assignees', 'POST', {'assignees': [repo.responsible]})
     children = [{'path': path, 'repository': child.github.repository, 'sha': head(child.path),
                  'pr': PRS.get(child.path, {}).get('number')} for path, _, _, _, child in repo.children]
     block = '<!-- tunning-sync:start -->\n' + f'Rama `{repo.branch}` → `{repo.base}`; SHA `{sha}`.\n\n'
@@ -418,11 +427,13 @@ def pr_publish(repo):
     else:
         pr = gh.api('pulls', 'POST', {'head': repo.branch, 'base': repo.base,
                                     'title': f'Sincronizar {repo.branch}', 'body': block, 'draft': True})
+    gh.api(f'issues/{pr["number"]}/assignees', 'POST', {'assignees': [repo.responsible]})
     PRS[repo.path] = pr
     state = read_state(repo)
     state.update({'schema': 1, 'path': str(repo.path), 'repository': gh.repository, 'branch': repo.branch,
                   'base': repo.base, 'sha': sha, 'base_sha': repo.base_sha, 'issue': repo.issue,
                   'pr': pr['number'], 'children': children,
+                  'responsible': repo.responsible,
                   'implementer': {'provider': value(repo.path, 'tunning.implementerProvider'),
                                   'session': value(repo.path, 'tunning.implementerSession'),
                                   'identity': git(repo.path, 'log', '-1', '--format=%an <%ae>').stdout.strip()}})
@@ -714,7 +725,8 @@ def audit_command(repo):
         fail(repo.path, 'La política no autoriza a este auditor independiente/proveedor/sesión.')
     gh = GitHub(repo.path, state['repository'])
     pr = gh.api(f'pulls/{state["pr"]}')
-    if head(repo.path) != state['sha'] or pr['head']['sha'] != state['sha'] or pr['base']['sha'] != state['base_sha']:
+    if (pr.get('merged') or pr.get('state') != 'open' or head(repo.path) != state['sha'] or
+            pr['head']['sha'] != state['sha'] or pr['base']['sha'] != state['base_sha']):
         fail(repo.path, 'El manifiesto/PR cambió antes de la auditoría; el implementador debe preparar la versión vigente.')
     clean(repo)
     issue = gh.api(f'issues/{state["issue"]}')
@@ -802,7 +814,7 @@ def merge_checks(repo, pr, policy):
     if pr.get('draft') or pr.get('mergeable') is not True or pr.get('mergeable_state') not in ('clean', 'unstable', 'has_hooks'):
         fail(repo.path, 'PR borrador, con conflicto o estado de integración sin resolver.')
     checks = gh.pages(f'commits/{pr["head"]["sha"]}/check-runs?filter=latest', 'check_runs')
-    statuses = gh.api(f'commits/{pr["head"]["sha"]}/status').get('statuses', [])
+    statuses = gh.pages(f'commits/{pr["head"]["sha"]}/statuses')
     latest = {}
     for status in statuses:
         latest.setdefault(status['context'], status['state'])
@@ -842,6 +854,9 @@ def merge_tree(repo):
             merged = repo.github.api(f'pulls/{receipt["pr"]}')
             if not merged.get('merged') or merged.get('merge_commit_sha') != receipt['sha']:
                 fail(repo.path, 'El progreso guardado no coincide con una fusión real en GitHub.')
+            repo.ensure_commit(receipt['sha'], repo.push_url)
+            if not ancestor(repo.path, receipt['sha'], head(repo.path)):
+                fail(repo.path, 'El resultado de la fusión guardada no está integrado en la rama activa.')
             MERGED[repo.path] = receipt
         return
     gh = repo.github
@@ -860,8 +875,10 @@ def merge_tree(repo):
     allowed_key = 'allow_merge_commit' if method == 'merge' else f'allow_{method}_merge'
     if method not in ('merge', 'squash', 'rebase') or not repo.metadata.get(allowed_key):
         fail(repo.path, f'Método de merge {method!r} no permitido por la política o GitHub.')
-    if repo.path != ROOT and method != 'merge':
-        fail(repo.path, 'Squash/rebase de un hijo requiere actualización manual del implementador y nueva auditoría del padre; el modo automático conserva su historia con merge.')
+    if method == 'rebase' and git(repo.path, 'rev-list', '--min-parents=2', pr['base']['sha'] + '..' + pr['head']['sha']).stdout.strip():
+        fail(repo.path, 'Rebase necesita historia lineal del PR; elige merge/squash o resuélvelo explícitamente.')
+    rebase_count = int(git(repo.path, 'rev-list', '--count', pr['base']['sha'] + '..' + pr['head']['sha']).stdout)
+    audited_tree = git(repo.path, 'rev-parse', 'HEAD^{tree}').stdout.strip()
     clean(repo)
     fresh = gh.api(f'pulls/{pr["number"]}')
     remote = heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}', f'refs/heads/{repo.base}')
@@ -878,17 +895,28 @@ def merge_tree(repo):
     save_state(repo, state)  # La fusión remota no se deshace si falla un paso posterior.
     MERGED[repo.path] = receipt
     repo.ensure_commit(result['sha'], repo.push_url)
-    if method == 'merge':
-        parents = git(repo.path, 'log', '-1', '--format=%P', result['sha']).stdout.split()
-        if parents != [pr['base']['sha'], pr['head']['sha']]:
-            fail(repo.path, 'La base cambió durante la fusión remota; se guardó el resultado, pero se detienen sus padres.')
-        git(repo.path, 'merge', '--ff-only', '--no-recurse-submodules', result['sha'], stream=True)
-        git(repo.path, 'push', '--recurse-submodules=check', '--', repo.push_remote,
-            f'HEAD:refs/heads/{repo.branch}', stream=True)
-        if heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') != head(repo.path):
-            fail(repo.path, 'La rama de trabajo no coincide con su publicación tras integrar la fusión.')
-        PUBLISHED[repo.path] = (head(repo.path), repo.push_remote, repo.branch)
-    # Squash/rebase raíz conserva la rama original y sus commits publicados.
+    parents = git(repo.path, 'log', '-1', '--format=%P', result['sha']).stdout.split()
+    expected_base = (parents == [pr['base']['sha'], pr['head']['sha']] if method == 'merge' else
+                     parents == [pr['base']['sha']] if method == 'squash' else
+                     git(repo.path, 'rev-parse', result['sha'] + '~' + str(rebase_count)).stdout.strip() == pr['base']['sha'])
+    if not expected_base or git(repo.path, 'rev-parse', result['sha'] + '^{tree}').stdout.strip() != audited_tree:
+        fail(repo.path, 'La base o el contenido cambió durante la fusión remota; se guardó el resultado, pero se detienen sus padres.')
+    if ancestor(repo.path, head(repo.path), result['sha']):
+        git(repo.path, 'merge', '--ff-only', result['sha'], stream=True)
+    else:
+        # Squash/rebase conserva los commits originales y la rama activa:
+        # integra el resultado remoto mediante un merge firmado, sin reset.
+        integrate(repo, ['merge', '--no-edit', '--no-autostash', *repo.sign, result['sha']], f'resultado {method} de PR #{pr["number"]}')
+    if git(repo.path, 'rev-parse', 'HEAD^{tree}').stdout.strip() != audited_tree:
+        fail(repo.path, 'Integrar la fusión cambió el contenido auditado; se conserva el trabajo y se detienen sus padres.')
+    clean(repo)
+    for path, _, _, urls, child in repo.children:
+        verify_reference(child, links(repo.path, committed=True)[path], urls)
+    git(repo.path, 'push', '--recurse-submodules=check', '--', repo.push_remote,
+        f'HEAD:refs/heads/{repo.branch}', stream=True)
+    if heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') != head(repo.path):
+        fail(repo.path, 'La rama de trabajo no coincide con su publicación tras integrar la fusión.')
+    PUBLISHED[repo.path] = (head(repo.path), repo.push_remote, repo.branch)
 
 
 def sync(repo, recorded=None):
