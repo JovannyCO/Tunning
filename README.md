@@ -1,195 +1,136 @@
-# Tunning — Terminal PRO Setup
+# Tunning — Terminal PRO
 
-Setup completo para una terminal de desarrollo profesional con estética **Material Design 3**.
+Configuración reproducible de los tres componentes de uso diario: **prompt Material MD3**, **`git sync`** y **`devup`**. Ubuntu 26 sobre WSL2 usa el prompt Bash de la terminal de referencia. Se conservan Starship, fastfetch y eza como opciones, y la variante de Google Cloud Shell sin iconos Nerd Font.
 
-## Paleta MD3
+## Instalar o actualizar
+
+En Ubuntu 26.04, con `git` y `python3` disponibles, clona este repo y ejecuta:
+
+```bash
+bash setup.sh
+source ~/.bashrc
+```
+
+Puedes invocar `setup.sh` por ruta absoluta desde cualquier directorio. Detecta Ubuntu/WSL2 o Cloud Shell antes de instalar. Instala los paquetes base necesarios y copia los comandos y la configuración a tu usuario:
+
+```text
+~/.local/bin/devup
+~/.local/bin/git-sync
+~/.config/tunning/bashrc_append.sh
+~/.config/tunning/prompt-bash.sh
+~/.config/tunning/settings.sh
+```
+
+Los comandos instalados son archivos independientes: mover o borrar el checkout no los rompe. El instalador integra un bloque en `.bashrc` y configura `git sync` en `.gitconfig`, conservando la identidad, firma y demás ajustes existentes.
+
+Para aplicar solo los archivos cuando ya tienes las dependencias, o inspeccionar primero los cambios:
+
+```bash
+bash setup.sh --no-packages
+bash setup.sh --no-packages --dry-run
+```
+
+Cada actualización guarda los archivos reemplazados bajo `~/.local/state/tunning/backups/<fecha>/`, con sus rutas relativas y un `manifest.json`. Si hay un error al escribir los archivos, intenta restaurar los ya modificados. Una reinstalación sin cambios no duplica bloques ni crea nuevos respaldos. Los marcadores incompletos de `.bashrc` provocan un error antes de modificar la configuración.
+
+`--target-dir /tmp/tunning-prueba --no-packages` prepara una instalación aislada sin cambiar `HOME`. Sirve para inspeccionar archivos; no activa esa configuración en tu sesión.
+
+## Apariencia y teclado
+
+El prompt Bash muestra usuario/host en naranja, directorio en azul cian sobre gris, rama Git en teal, reloj a la derecha y `╰ ❯` en la segunda línea. La flecha cambia de verde a rojo cuando falla un comando.
+
 | Rol | Color |
-|-----|-------|
-| Primario | `#FF6D00` naranja |
-| Secundario | `#00897B` teal |
+|---|---|
+| Primario | `#FF6D00` |
+| Secundario | `#00897B` |
+| Terciario (azul cian) | `#02BCF9` |
 | Superficie | `#1C1B1F` |
 | Superficie variante | `#2B2930` |
 
-## Stack
-| Herramienta | Propósito |
-|-------------|-----------|
-| [Starship](https://starship.rs) | Prompt con cápsulas redondeadas MD3 |
-| [fastfetch](https://github.com/fastfetch-cli/fastfetch) | Bienvenida al abrir terminal |
-| [eza](https://github.com/eza-community/eza) | `ls` moderno con íconos Nerd Font |
-| JetBrainsMono Nerd Font Mono | Fuente developer con íconos |
-| Windows Terminal | Color scheme Material MD3 |
+Incluye los atajos de la terminal de referencia: flechas arriba/abajo para buscar en el historial por prefijo, Tab para recorrer completados y Shift+Tab para retroceder. Conserva la zona horaria del sistema en Ubuntu/WSL y el tipo de terminal declarado por el emulador.
 
-## Prompt
-
-```
-( Ubuntu  me@DELL )  (  ~/proyecto )  (  main ↑1 )  ────  ( 22:45 )
-╰ ❯
-```
-
-### Indicadores git
-| Símbolo | Significado |
-|---------|-------------|
-| ` N` | N commits sin push |
-| ` N` | N commits por jalar |
-| ` ` | Archivos modificados |
-| ` ` | Cambios stageados |
-| ` ` | Archivos sin rastrear |
-| sin flecha | Sincronizado con remoto |
-
-### Zona horaria
-`configs/bashrc_append.sh` fija `TZ='America/Bogota'` (hora de Colombia, UTC‑5, sin DST).
-Aplica a `date`, al segmento `$time` del prompt y a la fecha de fastfetch — en cualquier
-entorno (WSL2 o Cloud Shell). Es necesario en Cloud Shell porque el contenedor arranca
-siempre en `Etc/UTC` y se resetea entre sesiones (no hay systemd para `timedatectl`, y
-`/etc/timezone` vive fuera de `~/` así que no persistiría); `TZ` sí persiste porque viaja
-en el propio `.bashrc`.
-
----
-
-## 🔄 Git Sync (Sincronización automatizada)
-
-El entorno local cuenta con un alias avanzado para Git que simplifica el flujo de desarrollo.
-
-### ¿Qué hace `git sync`?
-Este comando automatiza el proceso de commit y push de forma segura en un solo paso:
-1. **Stage**: Agrega todos los cambios (`git add -A`).
-2. **Commit**: Crea un commit con un mensaje estructurado.
-   - Formato: `usuario@hostname fecha - mensaje`
-   - Ejemplo: `limeyer@CSE 16julio09:34 - Cambios en la matrix`
-3. **Pull actual**: Hace pull de la rama actual (`origin $current_branch`) para evitar conflictos locales.
-4. **Pull production**: Si la rama `production` existe en el remoto, hace pull para mantener sincronía.
-5. **Push**: Sube los cambios locales (`origin HEAD`).
-
-### Uso
-- Sin argumentos (mensaje por defecto): `git sync`
-- Con mensaje personalizado: `git sync "Fix del botón de login"`
-
-### Configuración en Ubuntu 26
-Para añadir este alias a tu entorno global, copia y pega el siguiente bloque en tu terminal:
+Para activar también fastfetch y eza, o elegir el prompt Starship anterior:
 
 ```bash
-git config --global alias.sync '!f() { \
-    msg="${1:-Cambios en la matrix}"; \
-    m_num=$(date +%m); \
-    case "$m_num" in \
-        01) m_name="enero" ;; \
-        02) m_name="febrero" ;; \
-        03) m_name="marzo" ;; \
-        04) m_name="abril" ;; \
-        05) m_name="mayo" ;; \
-        06) m_name="junio" ;; \
-        07) m_name="julio" ;; \
-        08) m_name="agosto" ;; \
-        09) m_name="septiembre" ;; \
-        10) m_name="octubre" ;; \
-        11) m_name="noviembre" ;; \
-        12) m_name="diciembre" ;; \
-    esac; \
-    day=$(date +%d); \
-    day=${day#0}; \
-    date_str="${day}${m_name}$(date +%H:%M)"; \
-    commit_msg="$(whoami)@CSE ${date_str} - ${msg}"; \
-    current_branch=$(git branch --show-current); \
-    echo "=> Staging all changes..."; \
-    git add -A; \
-    echo "=> Creating commit: \"$commit_msg\"..."; \
-    git commit -m "$commit_msg" && \
-    echo "=> Pulling from origin $current_branch..."; \
-    git pull origin "$current_branch" && \
-    if git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then \
-        echo "=> Pulling from origin production..."; \
-        git pull origin production; \
-    fi && \
-    echo "=> Pushing to origin..."; \
-    git push origin HEAD; \
-}; f'
+bash setup.sh --extras
+bash setup.sh --prompt starship
 ```
 
----
+Starship activa también los extras. Para volver a la configuración Bash de referencia: `bash setup.sh --no-packages --prompt bash`.
 
+### Windows Terminal
 
-## Entornos soportados
+1. Instala **JetBrainsMono Nerd Font Mono** en **Windows** desde [Nerd Fonts v3.4.0](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.4.0).
+2. En el `settings.json` de Windows Terminal, añade el objeto interior `Material MD3` de [configs/windows_terminal_scheme.json](configs/windows_terminal_scheme.json) al array `schemes`.
+3. Añade las propiedades de [configs/windows_terminal_profile.json](configs/windows_terminal_profile.json) al perfil `Ubuntu-26.04`, conservando sus campos de identificación. También puedes aplicarlas a `profiles.defaults` si quieres esa apariencia en todos los perfiles.
 
-### 🖥️ Ubuntu 26.04 en WSL2
+El perfil reproduce fuente tamaño 13, peso normal, opacidad 92, acrílico, márgenes `14, 10, 14, 10` y antialiasing `cleartype`. El instalador Linux no modifica Windows Terminal; Microsoft documenta los [esquemas](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/color-schemes) y la [apariencia por perfil](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-appearance).
 
-Entorno principal. Usa `setup.sh` que instala vía `apt` y configura la fuente Nerd Font a nivel de sistema.
+En Ubuntu fuera de WSL, instala la misma fuente en el sistema que ejecuta tu emulador y selecciónala en sus preferencias.
+
+## Git sync
 
 ```bash
-chmod +x setup.sh && bash setup.sh
+git sync
+git sync "Fix del botón de login"
+```
+
+El alias invoca la copia autónoma de [scripts/git-sync.sh](scripts/git-sync.sh) instalada en `~/.local/bin/git-sync`. Usa Git y Python 3; después de actualizar el checkout, ejecuta `bash setup.sh --no-packages` para actualizar también el comando.
+
+1. Descubre todos los submódulos recursivamente y valida las ramas, los remotos, las preferencias y las operaciones pendientes del árbol antes de crear commits. Inicializa los faltantes en los commits registrados, sin usar `--remote` ni mover los checkouts existentes.
+2. Procesa los hijos más profundos primero. Cada repositorio agrega sus archivos y referencias hijas con `git add -A`; si corresponde, crea un commit con formato `usuario@hostname 4octubre12:34 - mensaje`. El mensaje predeterminado es `Cambios en la matrix`; Cloud Shell usa `CSE` como hostname.
+3. Integra mediante merge su rama remota y `production`, si existe y es otra rama, conservando los commits locales. Si un merge cambia los submódulos, vuelve a validar y sincronizar sus referencias antes de continuar.
+4. Comprueba que los commits hijos están disponibles en los remotos registrados y publica únicamente la rama de trabajo, también con [`--recurse-submodules=check`](https://git-scm.com/docs/git-push#Documentation/git-push.txt---recurse-submodulescheckon-demandonlyno). Establece un upstream cuando falta. Después, el padre confirma y publica las referencias de sus hijos ya publicados.
+
+Cada repositorio conserva su rama activa. Para un submódulo con HEAD separado hace falta `submodule.<nombre>.branch` en `.gitmodules` o en la configuración del padre; la configuración local tiene prioridad y `branch=.` usa la rama del padre. Integra los commits separados y los de la rama configurada antes de asociar HEAD a esa rama. Si la configuración es ambigua o las historias no se pueden integrar con seguridad, indica la ruta y se detiene conservando el trabajo.
+
+Los remotos se eligen con `branch.<rama>.remote`, `branch.<rama>.pushRemote` y `remote.pushDefault`, usando `origin` por defecto. El comando también publica commits pendientes con árbol limpio y ramas nuevas. No publica automáticamente `production` ni integra PR.
+
+**Un error de staging, commit, firma, autenticación, merge o push detiene el flujo con un código distinto de cero y la ruta afectada; sus padres no se publican.** Los conflictos quedan disponibles para resolverlos. El resumen muestra las ramas y commits publicados y, si hay un fallo posterior, identifica las publicaciones ya completadas como una sincronización incompleta.
+
+En Ubuntu/WSL el instalador habilita `tunning.syncSign=true`: los nuevos commits y los merges creados por el comando se firman. En Cloud Shell su valor inicial es `false`, como en la variante anterior. Una preferencia `tunning.syncSign` ya existente se conserva.
+
+```bash
+# Preferencias opcionales
+git config --global tunning.syncProduction false   # omitir la integración de production
+git config --global tunning.syncSign false         # usar la política habitual commit.gpgsign
+```
+
+Puedes clonar este repositorio público por HTTPS para preparar una terminal sin tener SSH configurado. Para publicar después, configura tu nombre y correo, la autenticación del remoto y tu clave de firma. Comprueba los ajustes con `git config --get user.name`, `git config --get user.email` y `git config --get user.signingkey`. La configuración de shell establece `GPG_TTY` en sesiones interactivas.
+
+`git sync` publica todos los archivos no ignorados de cada repositorio. Mantén credenciales, claves privadas y archivos `.env` fuera del control de versiones; `.gitignore` no protege archivos que ya están versionados. La firma verifica la autoría e integridad, pero no cifra los archivos. Consulta la [guía de GitHub para evitar publicar datos sensibles](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository#avoiding-accidental-commits-in-the-future).
+
+## devup
+
+[Scripts de actualización](scripts/devup.sh) recuperados de la copia de trabajo y compartidos por ambos entornos:
+
+```bash
+devup          # pregunta: todo / ligero / no; espera hasta 15 segundos
+devup -y       # apt update, upgrade y autoremove; después las CLI
+devup -l       # solo Firebase mediante npm, codex update y claude update
+devup --boot   # pregunta una vez por arranque, únicamente con entrada interactiva
+```
+
+Sin conexión, `--boot` lo intenta al abrir otra terminal. Varias terminales comparten el marcador de arranque; un bloqueo evita actualizaciones simultáneas. Si una actualización falla, las restantes se intentan y el comando termina con error y un resumen. Una actualización completa exitosa registra la fecha bajo `~/.cache/devup/` (o `XDG_CACHE_HOME`).
+
+Las herramientas ausentes se omiten. `devup` no instala NVM, Codex ni Claude; Firebase se instala/actualiza cuando está disponible npm. La configuración carga NVM antes de invocar el actualizador. Usa `TUNNING_DEVUP_BOOT=0` para omitir la pregunta de arranque en una sesión.
+
+## Google Cloud Shell
+
+```bash
+bash setup-cloudshell.sh
 source ~/.bashrc
 ```
 
-**Fuente (Windows):** Instalar **JetBrainsMono Nerd Font Mono** v3.4.0 desde
-[nerd-fonts releases](https://github.com/ryanoasis/nerd-fonts/releases/latest).
+El instalador común también lo detecta con `bash setup.sh`. Conserva la inicialización de Google antes de la personalización, Starship con hostname `CSE`, fastfetch y eza sin iconos, y `America/Bogota` como zona predeterminada cuando `TZ` no está definida. El panel de Cloud Shell Editor usa una lista fija de fuentes; esta variante conserva los símbolos Unicode estándar del repo.
 
-Windows Terminal → Settings → perfil Ubuntu → Font face: `JetBrainsMono Nerd Font Mono`
+Los binarios de Starship y eza se instalan en `~/.local/bin`; fastfetch mediante su paquete oficial. Esa descarga está preparada para x86_64. La configuración y los comandos de usuario permanecen en `~/`.
 
-### ☁️ Google Cloud Shell Editor
-
-Adaptado para Cloud Shell (Ubuntu 24.04 Noble). Diferencias clave:
-
-| Aspecto | WSL2 / Ubuntu 26 | Cloud Shell Editor |
-|---------|-------------------|--------------------|
-| Instalación | `sudo apt install` | Binarios en `~/.local/bin` (starship, eza) + `.deb` (fastfetch) |
-| Hostname | Dinámico (`$hostname`) | Fijo: `CSE` (Cloud Shell Editor) |
-| Fuentes | Nerd Font instalada en sistema | Sin íconos — no es configurable (ver nota) |
-| Windows Terminal | Esquema de color Material MD3 | N/A |
-| `bashrc.google` | N/A | Se preserva `source /google/devshell/bashrc.google` |
-| Persistencia | Disco local | `~/` persiste entre sesiones de Cloud Shell |
+## Comprobaciones y documentación
 
 ```bash
-chmod +x setup-cloudshell.sh && bash setup-cloudshell.sh
-source ~/.bashrc
+python3 -m unittest discover -s tests -v
 ```
 
-> **Nota sobre íconos en Cloud Shell (confirmado, no es un hack pendiente):** el panel de
-> terminal de Cloud Shell Editor no es un terminal VS Code corriente — su ícono de engranaje
-> (dentro del propio panel, no el Command Palette) trae un selector de **Font** con una lista
-> fija de fuentes predefinidas, sin campo de texto libre. No hay forma de apuntarlo a una Nerd
-> Font aunque esté instalada en tu máquina local, y `terminal.integrated.fontFamily` en
-> `settings.json` tampoco aplica ahí. Por eso `setup-cloudshell.sh` instala variantes **sin
-> íconos** (`starship-cloudshell.toml`, `fastfetch-cloudshell.jsonc`, y `eza` con
-> `--icons=never` cuando detecta `$CLOUD_SHELL`) en vez de depender de una fuente que el panel
-> nunca podrá cargar. Mismos colores y estructura MD3, con separadores planos y símbolos en
-> Unicode estándar (`↑ ↓ ✗ ❯ ─`) en lugar de glifos Nerd Font.
->
-> Si quieres los íconos reales, la única vía es no usar el panel de terminal de Cloud Shell:
-> conéctate a este mismo entorno desde una terminal de verdad (p. ej. `gcloud cloud-shell ssh`
-> desde Windows Terminal, donde ya tienes la Nerd Font instalada para el setup WSL2).
+Las pruebas usan repositorios y remotos Git temporales locales, configuraciones aisladas y sustitutos de los actualizadores. No instalan paquetes, no actualizan herramientas reales y no publican cambios en servidores.
 
-## Estructura del repo
-
-```
-Tunning/
-├── README.md
-├── SETUP-Firebase-Ubuntu-26.md
-├── setup.sh                          # Instalador para Ubuntu 26 / WSL2
-├── setup-cloudshell.sh               # Instalador para Google Cloud Shell Editor
-└── configs/
-    ├── bashrc_append.sh              # Aliases, funciones, historia (compartido)
-    ├── starship.toml                 # Prompt Starship — hostname dinámico, con íconos
-    ├── starship-cloudshell.toml      # Prompt Starship — hostname "CSE", sin íconos
-    ├── fastfetch.jsonc               # Bienvenida fastfetch (compartido), con íconos
-    ├── fastfetch-cloudshell.jsonc    # Bienvenida fastfetch — Cloud Shell, sin íconos
-    └── windows_terminal_scheme.json  # Esquema de color para Windows Terminal
-```
-
-## Instalación rápida (manual)
-
-```bash
-# Dependencias
-sudo add-apt-repository -y ppa:zhangsongcui3371/fastfetch
-sudo apt-get update && sudo apt-get install -y fastfetch
-
-curl -fLo /tmp/eza.tar.gz \
-  https://github.com/eza-community/eza/releases/latest/download/eza_x86_64-unknown-linux-gnu.tar.gz
-tar -xzf /tmp/eza.tar.gz -C /tmp/ && sudo mv /tmp/eza /usr/local/bin/eza
-
-curl -sS https://starship.rs/install.sh | sh
-
-# Configs
-mkdir -p ~/.config/fastfetch
-cp configs/starship.toml ~/.config/starship.toml          # o starship-cloudshell.toml
-cp configs/fastfetch.jsonc ~/.config/fastfetch/config.jsonc
-cat configs/bashrc_append.sh >> ~/.bashrc
-```
+[VALIDACION-Ubuntu-26-WSL2.md](VALIDACION-Ubuntu-26-WSL2.md) conserva el diagnóstico inicial y el estado de su reconciliación. [SETUP-Firebase-Ubuntu-26.md](SETUP-Firebase-Ubuntu-26.md) documenta por separado WSL, Node y Firebase; sus versiones son una referencia histórica.

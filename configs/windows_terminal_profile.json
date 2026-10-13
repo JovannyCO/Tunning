@@ -1,0 +1,12 @@
+{
+  "colorScheme": "Material MD3",
+  "font": {
+    "face": "JetBrainsMono Nerd Font Mono",
+    "size": 13,
+    "weight": "normal"
+  },
+  "padding": "14, 10, 14, 10",
+  "opacity": 92,
+  "useAcrylic": true,
+  "antialiasingMode": "cleartype"
+}
