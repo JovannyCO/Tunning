@@ -54,6 +54,13 @@ if MODE != 'sync':
     parser.add_argument('--pr', type=int)
     parser.add_argument('--record', type=Path)
     parser.add_argument('--run', type=int)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--provider')
+    parser.add_argument('--session')
+    parser.add_argument('--environment')
+    parser.add_argument('--signing-key')
+    parser.add_argument('--findings', type=Path)
+    parser.add_argument('--approve', action='store_true')
     OPTIONS = parser.parse_args()
 MESSAGE = ' '.join(OPTIONS.message if OPTIONS else sys.argv[1:]) or 'Cambios en la matrix'
 ROOT = None
@@ -666,6 +673,91 @@ def audit_policy(repo):
     return policy
 
 
+def audit_snapshot(path):
+    """Archivos propios y módulos inicializados; no staging, checkout ni refresh."""
+    index = path / git(path, 'rev-parse', '--git-path', 'index').stdout.removesuffix('\n')
+    result = {'head': head(path), 'index': digest(index.read_bytes()) if index.exists() else None, 'files': {}}
+    children = links(path, committed=True)
+    files = git(path, 'ls-files', '--cached', '--others', '--exclude-standard', '-z').stdout.split('\0')
+    for filename in sorted(set(files) - {''}):
+        entry = path / filename
+        if filename in children:
+            if not (entry / '.git').exists():
+                fail(entry, 'La auditoría exige un módulo inicializado; no modifica checkouts para prepararlo.')
+            result['files'][filename] = audit_snapshot(entry)
+        elif entry.is_symlink():
+            result['files'][filename] = ['symlink', os.readlink(entry)]
+        elif entry.is_file():
+            result['files'][filename] = [entry.stat().st_mode & 0o777, digest(entry.read_bytes())]
+        else:
+            result['files'][filename] = None
+    return result
+
+
+def audit_command(repo):
+    # Auditoría aparte del flujo de implementación: no prepare/discover/sync.
+    os.environ['GIT_OPTIONAL_LOCKS'] = '0'
+    state = read_state(repo)
+    if not state.get('pr') or not state.get('implementer', {}).get('provider'):
+        fail(repo.path, 'Primero el implementador debe publicar syncPR y registrar proveedor/sesión.')
+    if not all((OPTIONS.output, OPTIONS.provider, OPTIONS.session, OPTIONS.environment, OPTIONS.signing_key)):
+        fail(repo.path, 'Auditoría: usa --output, --provider, --session, --environment y --signing-key.')
+    if not OPTIONS.approve and not OPTIONS.findings:
+        fail(repo.path, 'Declara --approve tras revisar, o --findings con hallazgos; los tests no deciden la revisión.')
+    output = external_path(repo, OPTIONS.output, 'El informe')
+    if output.exists() or Path(str(output) + '.asc').exists():
+        fail(repo.path, 'El informe o su firma ya existen; usa otra ruta para conservar la evidencia.')
+    policy = audit_policy(repo)
+    signer = policy['auditors'].get(OPTIONS.signing_key.upper())
+    if (not signer or signer.get('provider') != OPTIONS.provider or not signer.get('identity') or
+            OPTIONS.provider == state['implementer']['provider'] or OPTIONS.session == state['implementer']['session']):
+        fail(repo.path, 'La política no autoriza a este auditor independiente/proveedor/sesión.')
+    gh = GitHub(repo.path, state['repository'])
+    pr = gh.api(f'pulls/{state["pr"]}')
+    if head(repo.path) != state['sha'] or pr['head']['sha'] != state['sha'] or pr['base']['sha'] != state['base_sha']:
+        fail(repo.path, 'El manifiesto/PR cambió antes de la auditoría; el implementador debe preparar la versión vigente.')
+    clean(repo)
+    issue = gh.api(f'issues/{state["issue"]}')
+    rows = criteria(issue.get('body'), repo.path)
+    findings = json.loads(external_path(repo, OPTIONS.findings, 'Los hallazgos').read_text()) if OPTIONS.findings else []
+    if not isinstance(findings, list) or (OPTIONS.approve and findings):
+        fail(repo.path, 'Hallazgos deben ser un array; --approve requiere cero hallazgos.')
+    before, results = audit_snapshot(repo.path), []
+    for command in policy['commands']:
+        try:
+            run = subprocess.run(command, cwd=repo.path, env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'},
+                                 capture_output=True, timeout=policy.get('timeout_seconds', 600))
+            results.append({'argv': command, 'returncode': run.returncode,
+                            'log_sha256': digest(run.stdout + b'\n' + run.stderr)})
+        except subprocess.TimeoutExpired:
+            results.append({'argv': command, 'returncode': 124, 'log_sha256': digest(b'timeout')})
+        except OSError as error:
+            results.append({'argv': command, 'returncode': 127, 'log_sha256': digest(str(error).encode())})
+    try:
+        unchanged = audit_snapshot(repo.path) == before
+    except (SyncError, OSError):
+        unchanged = False
+    report = {'schema': 1, 'repository': state['repository'], 'sha': state['sha'], 'base_sha': state['base_sha'],
+              'children': links(repo.path, committed=True), 'pr': state['pr'], 'issue': state['issue'],
+              'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows])), 'policy_sha256': policy['_sha256'],
+              'implementer': state['implementer'],
+              'auditor': {'provider': OPTIONS.provider, 'session': OPTIONS.session, 'environment': OPTIONS.environment,
+                          'identity': signer['identity']},
+              'tests': results, 'findings': findings, 'unchanged': unchanged,
+              'review_approved': OPTIONS.approve, 'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open('x', encoding='utf-8') as destination:
+        json.dump(report, destination, ensure_ascii=True, indent=2)
+    output.chmod(0o600)
+    signed = subprocess.run(['gpg', '--batch', '--local-user', OPTIONS.signing_key, '--armor', '--detach-sign',
+                             '--output', str(output) + '.asc', str(output)], capture_output=True)
+    if signed.returncode:
+        fail(repo.path, f'No se pudo firmar el informe {output}; se conserva sin aprobar.')
+    print(f'Informe de auditoría: {output}; firma: {output}.asc; sin cambios: {unchanged}.')
+    if not unchanged or findings or not OPTIONS.approve or any(t['returncode'] for t in results):
+        fail(repo.path, 'Auditoría fallida; informe conservado. El auditor no corrige ni revierte el código.')
+
+
 def verified_audit(repo, pr, policy):
     filename = value(repo.path, 'tunning.auditReport')
     if not filename:
@@ -700,7 +792,7 @@ def verified_audit(repo, pr, policy):
     results = report.get('tests', [])
     if ([t.get('argv') for t in results] != policy['commands'] or
             any(t.get('returncode') != 0 or not re.fullmatch(r'[a-f0-9]{64}', t.get('log_sha256', '')) for t in results) or
-            report.get('findings') != [] or report.get('unchanged') is not True):
+            report.get('findings') != [] or report.get('unchanged') is not True or report.get('review_approved') is not True):
         fail(repo.path, 'Auditoría con hallazgos, cambios de código o suites incompletas/fallidas.')
     return {'fingerprint': fingerprint, 'report_sha256': digest(report_path.read_bytes()), 'report': report}
 
@@ -869,9 +961,12 @@ try:
     if MODE == 'criteria':
         criteria_command()
         sys.exit(0)
-    if MODE not in ('sync', 'syncPR', 'syncPRmerge'):
+    if MODE not in ('sync', 'syncPR', 'syncPRmerge', 'audit'):
         fail(Path.cwd(), f'Modo desconocido: {MODE}.')
     ROOT = Path(git(Path.cwd(), 'rev-parse', '--show-toplevel').stdout.removesuffix('\n')).resolve()
+    if MODE == 'audit':
+        audit_command(Repo(ROOT))
+        sys.exit(0)
     print('=> Validando repositorios y submódulos antes de confirmar cambios...', flush=True)
     root = prepare(ROOT)
     sync(root)
