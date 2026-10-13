@@ -3,10 +3,15 @@
 # bloques de abajo (alias de eza, etc.) hacen `command -v` sobre ellos.
 # Si esto se exporta después (como antes, junto a "Starship prompt"),
 # `command -v eza` falla en una shell nueva y el alias cae al `ls` plano.
-export PATH="$HOME/.local/bin:$PATH"
+[[ $- == *i* ]] || return 0
+TUNNING_CONFIG_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f $TUNNING_CONFIG_DIR/settings.sh ]]; then
+    . "$TUNNING_CONFIG_DIR/settings.sh"
+fi
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 
 # ── Historia ────────────────────────────────────────────────────────────
-HISTCONTROL=ignoreboth:erasedups
+HISTCONTROL=ignoreboth
 HISTSIZE=10000
 HISTFILESIZE=20000
 HISTTIMEFORMAT="%F %T  "
@@ -14,6 +19,10 @@ shopt -s histappend
 shopt -s checkwinsize
 shopt -s globstar
 shopt -s cdspell
+bind '"\e[A": history-search-backward'
+bind '"\e[B": history-search-forward'
+bind 'TAB: menu-complete'
+bind '"\e[Z": menu-complete-backward'
 
 # ── Completado ──────────────────────────────────────────────────────────
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
@@ -53,13 +62,13 @@ alias -- -='cd -'
 # verificó con el usuario), así que con --icons=always todo se ve con
 # rectángulos. Se detecta el entorno (var oficial de Cloud Shell) y se
 # desactivan los íconos solo ahí; WSL2 conserva los íconos normales.
-if [ -n "${CLOUD_SHELL:-}" ]; then
+if [[ ${TUNNING_PROFILE:-} == cloudshell || -n ${CLOUD_SHELL:-} ]]; then
     EZA_ICONS='never'
 else
     EZA_ICONS='always'
 fi
 
-if command -v eza &>/dev/null; then
+if [[ ${TUNNING_EXTRAS:-false} == true ]] && command -v eza &>/dev/null; then
     alias ls="eza --icons=$EZA_ICONS --group-directories-first --color=always"
     alias ll="eza -la --icons=$EZA_ICONS --group-directories-first --color=always --git --header"
     alias la="eza -a --icons=$EZA_ICONS --group-directories-first --color=always"
@@ -118,25 +127,39 @@ export VISUAL='vim'
 export LANG='C.UTF-8'
 export LC_ALL='C.UTF-8'
 export COLORTERM=truecolor
-export TERM=xterm-256color
 
-# Zona horaria fija (Colombia). Cloud Shell resetea el contenedor entre
-# sesiones y siempre arranca en Etc/UTC — no hay systemd para `timedatectl`,
-# y tocar /etc/timezone no persistiría (vive fuera de ~/). TZ sí persiste
-# porque se exporta desde este archivo, y la respetan `date`, el módulo
-# $time de Starship y el datetime de fastfetch.
-export TZ='America/Bogota'
+# Cloud Shell conserva la preferencia Colombia; Ubuntu/WSL conserva su zona.
+if [[ ${TUNNING_PROFILE:-} == cloudshell || -n ${CLOUD_SHELL:-} ]]; then
+    export TZ="${TZ:-America/Bogota}"
+fi
 
 # ── NVM ──────────────────────────────────────────────────────────────────
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if ! declare -F nvm >/dev/null; then
+    [ ! -s "$NVM_DIR/nvm.sh" ] || \. "$NVM_DIR/nvm.sh"
+    [ ! -s "$NVM_DIR/bash_completion" ] || \. "$NVM_DIR/bash_completion"
+fi
+
+# Firma de commits desde terminales interactivas.
+if [[ -t 0 ]]; then
+    GPG_TTY=$(tty)
+    export GPG_TTY
+fi
+
+# El fallo de una actualización no interrumpe la carga del prompt.
+if [[ ${TUNNING_DEVUP_BOOT:-1} != 0 ]] && command -v devup &>/dev/null; then
+    devup --boot || true
+fi
 
 # ── Bienvenida (fastfetch al abrir terminal) ─────────────────────────────
-if command -v fastfetch &>/dev/null && [[ $- == *i* ]] && [[ -z "$FASTFETCH_SHOWN" ]]; then
+if [[ ${TUNNING_EXTRAS:-false} == true ]] && command -v fastfetch &>/dev/null && [[ -z ${FASTFETCH_SHOWN:-} ]]; then
     export FASTFETCH_SHOWN=1
     fastfetch
 fi
 
 # ── Starship prompt ───────────────────────────────────────────────────────
-eval "$(starship init bash)"
+if [[ ${TUNNING_PROMPT:-bash} == starship ]] && command -v starship &>/dev/null; then
+    eval "$(starship init bash)"
+else
+    . "$TUNNING_CONFIG_DIR/prompt-bash.sh"
+fi
