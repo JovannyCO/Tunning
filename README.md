@@ -1,5 +1,7 @@
 # Tunning: terminal reproducible para Ubuntu, WSL2 y Cloud Shell
 
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) · [Pruebas automatizadas](https://github.com/JovannyCO/Tunning/actions/workflows/tests.yml)
+
 [![Tunning: tu entorno listo para trabajar. Explora el proyecto de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software.](assets/tunning-jovanny-medina-cifuentes-header.png)](#de-una-terminal-nueva-a-un-entorno-de-trabajo)
 
 **Una terminal nueva debería acercarte a tu trabajo, no devolverte a la configuración inicial.**
@@ -47,6 +49,8 @@ bash setup.sh --no-packages
 
 Para Windows Terminal, fuentes, extras, Starship y respaldos, consulta la [guía de instalación y apariencia](docs/USO.md#apariencia-y-teclado).
 
+La [matriz de compatibilidad](docs/COMPATIBILIDAD.md) distingue los ajustes automáticos de los pasos del emulador y del editor. Si usas un agente de IA, comienza por [AGENTS.md](AGENTS.md). Para comprobar la instalación dentro de Google Cloud Shell, copia [promptTMP.md](promptTMP.md) en tu agente.
+
 ### Tres acciones de uso diario
 
 ```bash
@@ -83,7 +87,7 @@ Puedes clonar este repositorio público por HTTPS sin configurar SSH ni iniciar 
 
 ### ¿Se conservan mi identidad Git y mis preferencias?
 
-El instalador conserva la identidad, la firma y los ajustes existentes, y guarda respaldos de los archivos que reemplaza. Una reinstalación sin cambios no duplica bloques de configuración. Consulta la [guía de instalación](docs/USO.md#instalar-o-actualizar).
+El instalador conserva la identidad, la firma, el prompt y los extras elegidos, y guarda respaldos de los archivos que reemplaza. Una reinstalación sin cambios no duplica bloques de configuración. Para cambiar de selección usa `--prompt`, `--extras` o `--no-extras`: [guía de instalación](docs/USO.md#instalar-o-actualizar).
 
 ### ¿Git sync también publica los submódulos?
 
@@ -98,10 +102,15 @@ El comando publica las ramas de trabajo. La creación del issue, la revisión y 
 Puedes leer el [código del instalador](scripts/install.py), usar `--dry-run` o preparar una [instalación aislada](docs/USO.md#instalar-o-actualizar). Para ejecutar las pruebas:
 
 ```bash
+python3 scripts/verify.py
 python3 -m unittest discover -s tests -v
 ```
 
 Las pruebas usan repositorios, remotos y configuraciones temporales. No publican cambios en servidores ni actualizan tus herramientas reales.
+
+## Licencia y contribuciones
+
+Tunning se distribuye bajo [MIT](LICENSE), con atribución a **Jovanny Medina Cifuentes**. Puedes usarlo, modificarlo y compartirlo conservando los avisos de autor y licencia. Las dependencias externas mantienen sus propias licencias. Consulta [cómo contribuir](CONTRIBUTING.md) y [cómo informar de un problema de seguridad](SECURITY.md).
 
 ## Hablemos de tu proyecto
 

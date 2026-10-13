@@ -34,6 +34,8 @@ bash setup.sh --no-packages --dry-run
 
 Cada actualización guarda los archivos reemplazados bajo `~/.local/state/tunning/backups/<fecha>/`, con sus rutas relativas y un `manifest.json`. Si hay un error al escribir los archivos, intenta restaurar los ya modificados. Una reinstalación sin cambios no duplica bloques ni crea nuevos respaldos. Los marcadores incompletos de `.bashrc` provocan un error antes de modificar la configuración.
 
+Sin opciones nuevas conserva el prompt y los extras de `settings.sh`; la detección del entorno sigue siendo automática. El instalador lee únicamente preferencias literales conocidas, sin ejecutar ese archivo, y se detiene si contiene una configuración inválida. Las opciones explícitas cambian la selección.
+
 `--target-dir /tmp/tunning-prueba --no-packages` prepara una instalación aislada sin cambiar `HOME`. Sirve para inspeccionar archivos; no activa esa configuración en tu sesión.
 
 ## Apariencia y teclado
@@ -57,7 +59,7 @@ bash setup.sh --extras
 bash setup.sh --prompt starship
 ```
 
-Starship activa también los extras. Para volver a la configuración Bash de referencia: `bash setup.sh --no-packages --prompt bash`.
+Starship activa también los extras. `--prompt bash` conserva los extras previamente activados. Para volver a Bash sin extras: `bash setup.sh --no-packages --prompt bash --no-extras`. Desactivar extras conserva sus binarios y archivos de configuración; deja de activarlos al abrir la terminal.
 
 ### Windows Terminal
 
@@ -123,13 +125,14 @@ bash setup-cloudshell.sh
 source ~/.bashrc
 ```
 
-El instalador común también lo detecta con `bash setup.sh`. Conserva la inicialización de Google antes de la personalización, Starship con hostname `CSE`, fastfetch y eza sin iconos, y `America/Bogota` como zona predeterminada cuando `TZ` no está definida. El panel de Cloud Shell Editor usa una lista fija de fuentes; esta variante conserva los símbolos Unicode estándar del repo.
+El instalador común también lo detecta con `bash setup.sh`. Una instalación nueva selecciona Starship y extras; las reinstalaciones conservan tu elección. Mantiene la inicialización de Google antes de la personalización, hostname `CSE`, fastfetch y eza sin iconos, y `America/Bogota` como zona predeterminada cuando `TZ` no está definida. También el prompt Bash de respaldo evita glifos Nerd Font.
 
-Los binarios de Starship y eza se instalan en `~/.local/bin`; fastfetch mediante su paquete oficial. Esa descarga está preparada para x86_64. La configuración y los comandos de usuario permanecen en `~/`.
+Los tres binarios se instalan en `~/.local/bin`, con versiones y SHA256 oficiales fijados. Esa descarga está preparada para x86_64 y comprueba todos los archivos antes de instalarlos; conserva ejecutables de usuario existentes. La configuración y los comandos permanecen en HOME. Los temas y fuentes del navegador/editor requieren sus propias opciones: [compatibilidad y límites](COMPATIBILIDAD.md), [prompt de validación real](../promptTMP.md).
 
 ## Comprobaciones y documentación
 
 ```bash
+python3 scripts/verify.py
 python3 -m unittest discover -s tests -v
 ```
 

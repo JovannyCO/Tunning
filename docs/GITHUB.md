@@ -13,7 +13,7 @@ La portada presenta Tunning como un caso de trabajo de **Jovanny Medina Cifuente
 | GEO: ofrecer información comprobable para búsquedas y respuestas generativas | Autor y roles explícitos, contexto del problema, alcance del proyecto y referencias al código y las pruebas |
 | Accesibilidad y uso de imágenes | Archivos locales con nombres descriptivos, texto alternativo y CTA disponibles también como texto |
 
-Los enlaces a archivos e imágenes son relativos para que GitHub los resuelva según la rama consultada. La portada propuesta estará en la página principal del repositorio cuando su PR se integre en `main`.
+Los enlaces a archivos e imágenes son relativos para que GitHub los resuelva según la rama consultada. La página principal muestra `main`; los cambios de una rama de trabajo aparecen allí después de integrar su PR.
 
 ## Metadatos de GitHub
 
@@ -24,6 +24,8 @@ La descripción y los topics se guardan en GitHub, fuera de los archivos version
 **Topics:** `ubuntu`, `wsl2`, `google-cloud-shell`, `bash`, `python`, `terminal`, `developer-experience`, `dotfiles`, `material-design-3`, `git`, `git-submodules`, `automation`.
 
 Si cambia el alcance del proyecto, actualiza tanto estos metadatos como el README. Mantén el nombre profesional, los dos roles y los datos de contacto consistentes; evita repetir palabras clave sin aportar información.
+
+La [licencia MIT](../LICENSE), la [guía de contribución](../CONTRIBUTING.md), la [política de seguridad](../SECURITY.md) y el [workflow de pruebas](../.github/workflows/tests.yml) aportan condiciones de reutilización y comprobaciones visibles. El enlace a Actions muestra ejecuciones reales; no se atribuye un resultado a una ejecución pendiente.
 
 ## Alcance de la optimización
 

@@ -247,6 +247,58 @@ class InstallTests(Fixture):
         self.assertEqual((target / '.config/fastfetch/config.jsonc').read_bytes(),
                          (REPO / 'configs/fastfetch-cloudshell.jsonc').read_bytes())
 
+    def test_reinstall_retains_selected_prompt_and_extras(self):
+        for prompt in ('bash', 'starship'):
+            with self.subTest(prompt=prompt):
+                target = self.root / prompt
+                self.install(target, '--prompt', prompt, '--extras')
+                first = {str(p.relative_to(target)): p.read_bytes() for p in target.rglob('*') if p.is_file()}
+                self.install(target)
+                second = {str(p.relative_to(target)): p.read_bytes() for p in target.rglob('*') if p.is_file()}
+                self.assertEqual(first, second)
+                settings = (target / '.config/tunning/settings.sh').read_text()
+                self.assertIn(f'TUNNING_PROMPT={prompt}', settings)
+                self.assertIn('TUNNING_EXTRAS=true', settings)
+
+    def test_explicitly_disable_extras_and_retain_choice(self):
+        target = self.root / 'target'
+        self.install(target, '--prompt', 'starship')
+        self.install(target, '--prompt', 'bash', '--no-extras')
+        self.install(target)
+        settings = (target / '.config/tunning/settings.sh').read_text()
+        self.assertIn('TUNNING_PROMPT=bash', settings)
+        self.assertIn('TUNNING_EXTRAS=false', settings)
+
+    def test_cloudshell_wrapper_retains_bash_choice(self):
+        target = self.root / 'cloud'
+        args = ['bash', REPO / 'setup-cloudshell.sh', '--no-packages', '--target-dir', target]
+        execute([*args, '--prompt', 'bash', '--no-extras'], env=self.env)
+        execute(args, env=self.env)
+        settings = (target / '.config/tunning/settings.sh').read_text()
+        self.assertIn('TUNNING_PROFILE=cloudshell', settings)
+        self.assertIn('TUNNING_PROMPT=bash', settings)
+        self.assertIn('TUNNING_EXTRAS=false', settings)
+
+    def test_invalid_preferences_stop_without_execution_or_writes(self):
+        target = self.root / 'target'
+        self.install(target)
+        preferences = target / '.config/tunning/settings.sh'
+        preferences.write_text('export TUNNING_PROMPT=$(touch SENTINEL)\n')
+        before = {str(p.relative_to(target)): p.read_bytes() for p in target.rglob('*') if p.is_file()}
+        result = self.install(target, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('settings.sh:1:', result.stderr)
+        self.assertFalse((self.root / 'SENTINEL').exists())
+        after = {str(p.relative_to(target)): p.read_bytes() for p in target.rglob('*') if p.is_file()}
+        self.assertEqual(before, after)
+
+    def test_starship_without_extras_stops_before_install(self):
+        target = self.root / 'target'
+        result = self.install(target, '--prompt', 'starship', '--no-extras', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('--prompt bash --no-extras', result.stderr)
+        self.assertFalse(target.exists())
+
 
 class DevupTests(Fixture):
     def setUp(self):
@@ -313,6 +365,18 @@ class DevupTests(Fixture):
 
 
 class PromptTests(Fixture):
+    def test_cloudshell_bash_fallback_uses_no_private_font_glyphs(self):
+        env = {**self.env, 'TERM': 'xterm-256color', 'USER': 'tester', 'COLUMNS': '120',
+               'TUNNING_PROFILE': 'cloudshell'}
+        source = shlex.quote(str(REPO / 'configs/prompt-bash.sh'))
+        command = f'source {source}; false; __build_ps1; printf "%s" "${{PS1@P}}"'
+        result = execute(['bash', '--noprofile', '--norc', '-c', command], env=env, cwd=self.root)
+        self.assertIn('tester@CSE', result.stdout)
+        self.assertIn('2;188;249', result.stdout)
+        self.assertIn('207;102;121m\x02❯', result.stdout)
+        self.assertFalse(any(0xE000 <= ord(c) <= 0xF8FF or 0xF0000 <= ord(c) <= 0x10FFFD
+                             for c in result.stdout))
+
     def test_prompt_contains_current_palette_and_success_error_colors(self):
         env = {**self.env, 'TERM': 'xterm-256color', 'USER': 'tester', 'COLUMNS': '120'}
         source = shlex.quote(str(REPO / 'configs/prompt-bash.sh'))

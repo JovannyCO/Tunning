@@ -43,12 +43,18 @@ __build_ps1() {
 
     local user=${USER} host=${HOSTNAME%%.*} dir="${PWD/#$HOME/\~}"
     local chroot="${debian_chroot:+($debian_chroot) }"
+    local folder='󰉋' clock='󱑂'
+    if [[ ${TUNNING_PROFILE:-} == cloudshell || -n ${CLOUD_SHELL:-} ]]; then
+        host=CSE
+        folder='dir'
+        clock='hora'
+    fi
 
     # Orange capsule
     local L="${ofg}${CL}${R}${obg}${kfg}${B}  ${chroot}${user}@${host} ${R}"
 
     # Dark capsule
-    L+="${ofg}${CR}${R} ${dfg}${CL}${R}${dbg}${tertiary_fg}${B} 󰉋 ${dir} ${R}"
+    L+="${ofg}${CR}${R} ${dfg}${CL}${R}${dbg}${tertiary_fg}${B} ${folder} ${dir} ${R}"
 
     # Teal capsule (git, conditional)
     local gi; gi=$(__git_ps1_md3 2>/dev/null) || gi=''
@@ -64,13 +70,14 @@ __build_ps1() {
     # Visible width: strip NP..EP blocks (ANSI sequences) then count chars
     local Lv; Lv=$(printf '%s' "$L" | sed $'s/\001[^\002]*\002//g' | wc -m)
 
-    # Right: time → CL + " 󱑂 HH:MM " + CR = 11 visible
+    # Medir también el reloj: los rótulos Cloud Shell no requieren Nerd Font.
     local ts; ts=$(date +%H:%M)
-    local RT="${dfg}${CL}${R}${obg}${kfg}${B} 󱑂 ${ts} ${R}${ofg}${CR}${R}"
+    local RT="${dfg}${CL}${R}${obg}${kfg}${B} ${clock} ${ts} ${R}${ofg}${CR}${R}"
+    local Rv; Rv=$(printf '%s' "$RT" | sed $'s/\001[^\002]*\002//g' | wc -m)
 
     # Fill ─────────────────────────────────────────────────────────────
     local cols=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
-    local fn=$(( cols - Lv - 11 )); (( fn < 1 )) && fn=1
+    local fn=$(( cols - Lv - Rv )); (( fn < 1 )) && fn=1
     local fs; fs=$(printf '─%.0s' $(seq 1 "$fn"))
 
     # Line 2: ╰ ❯ (green on success, red on error)
