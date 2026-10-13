@@ -29,6 +29,29 @@ def detect_profile():
     return 'wsl' if 'microsoft' in platform.release().lower() else 'ubuntu'
 
 
+def saved_preferences(path):
+    """Lee únicamente los valores generados; nunca ejecuta settings.sh."""
+    if not path.exists():
+        return {}
+    allowed = {'TUNNING_PROFILE': {'wsl', 'ubuntu', 'cloudshell'},
+               'TUNNING_PROMPT': {'bash', 'starship'},
+               'TUNNING_EXTRAS': {'true', 'false'}}
+    saved = {}
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        fields = shlex.split(line, comments=True)
+        if not fields:
+            continue
+        if fields[0] == 'export':
+            fields = fields[1:]
+        if len(fields) != 1 or '=' not in fields[0]:
+            raise ValueError(f'{path}:{number}: se esperaba una preferencia literal.')
+        key, value = fields[0].split('=', 1)
+        if key not in allowed or value not in allowed[key] or key in saved:
+            raise ValueError(f'{path}:{number}: preferencia desconocida, inválida o repetida.')
+        saved[key] = value
+    return saved
+
+
 def bashrc_contents(original, config_dir, profile):
     # Preflight: no eliminar nada si hay marcadores incompletos o anidados.
     outside = []
@@ -120,7 +143,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', choices=['auto', 'wsl', 'ubuntu', 'cloudshell'], default='auto')
     parser.add_argument('--prompt', choices=['bash', 'starship'])
-    parser.add_argument('--extras', action='store_true', help='Instalar/activar eza y fastfetch además de Starship.')
+    extra_flags = parser.add_mutually_exclusive_group()
+    extra_flags.add_argument('--extras', dest='extras', action='store_true',
+                             help='Instalar/activar eza y fastfetch además de Starship.')
+    extra_flags.add_argument('--no-extras', dest='extras', action='store_false',
+                             help='Desactivar extras; requiere el prompt Bash.')
+    parser.set_defaults(extras=None)
     parser.add_argument('--no-packages', action='store_true', help='Solo instalar configuración y comandos.')
     parser.add_argument('--target-dir', type=Path, help='Destino alternativo para pruebas o preparación.')
     parser.add_argument('--dry-run', action='store_true', help='Mostrar cambios sin instalar ni escribir destinos.')
@@ -129,12 +157,15 @@ def main():
     profile = detected if args.profile == 'auto' else args.profile
     if profile != detected and not (args.target_dir and args.no_packages):
         raise ValueError(f'Perfil solicitado: {profile}; entorno detectado: {detected}.')
-    prompt = args.prompt or ('starship' if profile == 'cloudshell' else 'bash')
-    extras = args.extras or prompt == 'starship'
-    if profile == 'cloudshell' and extras and args.target_dir and not args.no_packages:
-        raise ValueError('Para preparar otro destino Cloud Shell usa --no-packages.')
     target = (args.target_dir or Path.home()).expanduser().absolute()
     config_dir = target / '.config/tunning'
+    saved = saved_preferences(config_dir / 'settings.sh')
+    prompt = args.prompt or saved.get('TUNNING_PROMPT') or ('starship' if profile == 'cloudshell' else 'bash')
+    if prompt == 'starship' and args.extras is False:
+        raise ValueError('Starship requiere extras. Para desactivarlos usa --prompt bash --no-extras.')
+    extras = (args.extras if args.extras is not None else saved.get('TUNNING_EXTRAS') == 'true') or prompt == 'starship'
+    if profile == 'cloudshell' and extras and args.target_dir and not args.no_packages:
+        raise ValueError('Para preparar otro destino Cloud Shell usa --no-packages.')
     bashrc = target / '.bashrc'
     gitconfig = target / '.gitconfig'
     # Validar marcadores y Git antes de instalar paquetes o escribir configuración.

@@ -1,0 +1,38 @@
+name: Pruebas
+
+on:
+  push:
+    branches: [main, Ubuntu26]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  terminal:
+    runs-on: ubuntu-24.04
+    # El instalador admite Ubuntu 26.04. Mantener el SO real en las pruebas.
+    container: ubuntu:26.04
+    timeout-minutes: 15
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Dependencias de las pruebas
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git python3 gnupg ca-certificates
+      - name: Obtener el código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Sintaxis y enlaces locales
+        run: python3 scripts/verify.py
+      - name: Pruebas de integración con fixtures locales
+        run: python3 -m unittest discover -s tests -v
