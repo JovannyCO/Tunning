@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entrada de CI; el contrato de criterios vive en el motor común instalado."""
+"""Validación local; el contrato de criterios vive en el motor común instalado."""
 from pathlib import Path
 import subprocess
 import sys

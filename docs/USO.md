@@ -83,13 +83,14 @@ El alias invoca la copia autónoma de [scripts/git-sync.sh](../scripts/git-sync.
 1. Descubre todos los submódulos recursivamente y valida las ramas, los remotos, las preferencias y las operaciones pendientes del árbol antes de crear commits. Inicializa los faltantes en los commits registrados, sin usar `--remote` ni mover los checkouts existentes.
 2. Procesa los hijos más profundos primero. Cada repositorio agrega sus archivos y referencias hijas con `git add -A`; si corresponde, crea un commit con formato `usuario@hostname 4octubre12:34 - mensaje`. El mensaje predeterminado es `Cambios en la matrix`; Cloud Shell usa `CSE` como hostname.
 3. Integra mediante merge su rama remota y `production`, si existe y es otra rama, conservando los commits locales. Si un merge cambia los submódulos, vuelve a validar y sincronizar sus referencias antes de continuar.
-4. Comprueba que los commits hijos están disponibles en los remotos registrados y publica únicamente la rama de trabajo, también con [`--recurse-submodules=check`](https://git-scm.com/docs/git-push#Documentation/git-push.txt---recurse-submodulescheckon-demandonlyno). Establece un upstream cuando falta. Después, el padre confirma y publica las referencias de sus hijos ya publicados.
+4. Ejecuta las suites locales sobre el resultado que va a publicar. Si fallan, se detiene antes del push de ese repositorio; conserva los cambios para corregirlos y repetir las pruebas.
+5. Comprueba que los commits hijos están disponibles en los remotos registrados y publica únicamente la rama de trabajo, también con [`--recurse-submodules=check`](https://git-scm.com/docs/git-push#Documentation/git-push.txt---recurse-submodulescheckon-demandonlyno). Establece un upstream cuando falta. Después, el padre confirma y publica las referencias de sus hijos ya publicados.
 
 Cada repositorio conserva su rama activa. Para un submódulo con HEAD separado hace falta `submodule.<nombre>.branch` en `.gitmodules` o en la configuración del padre; la configuración local tiene prioridad y `branch=.` usa la rama del padre. Integra los commits separados y los de la rama configurada antes de asociar HEAD a esa rama. Si la configuración es ambigua o las historias no se pueden integrar con seguridad, indica la ruta y se detiene conservando el trabajo.
 
 Los remotos se eligen con `branch.<rama>.remote`, `branch.<rama>.pushRemote` y `remote.pushDefault`, usando `origin` por defecto. El comando también publica commits pendientes con árbol limpio y ramas nuevas. No publica automáticamente `production` ni integra PR.
 
-**Un error de staging, commit, firma, autenticación, merge o push detiene el flujo con un código distinto de cero y la ruta afectada; sus padres no se publican.** Los conflictos quedan disponibles para resolverlos. El resumen muestra las ramas y commits publicados y, si hay un fallo posterior, identifica las publicaciones ya completadas como una sincronización incompleta.
+**Un error de staging, commit, firma, autenticación, merge, pruebas locales o push detiene el flujo con un código distinto de cero y la ruta afectada; sus padres no se publican.** Los conflictos quedan disponibles para resolverlos. El resumen muestra las ramas y commits publicados y, si hay un fallo posterior, identifica las publicaciones ya completadas como una sincronización incompleta.
 
 En Ubuntu/WSL el instalador habilita `tunning.syncSign=true`: los nuevos commits y los merges creados por el comando se firman. En Cloud Shell su valor inicial es `false`, como en la variante anterior. Una preferencia `tunning.syncSign` ya existente se conserva.
 
@@ -114,6 +115,25 @@ git diff --cached --stat
 Para revisar también las ramas y los cambios propios de los submódulos ya inicializados, usa `git submodule foreach --recursive 'git status --short --branch'`.
 Los modos `git syncPR` y `git syncPRmerge` añaden creación de PR y fusión
 condicionada. Sus requisitos y evidencias están en la [guía de PR](GIT-PR.md).
+
+Los tres modos buscan `scripts/test-local.py` en cada repositorio. Para un
+proyecto con otra suite, configura `tunning.testCommands` como un array JSON de
+comandos, cada uno expresado como un array de argumentos. Se ejecutan en la raíz
+de ese repositorio; no se interpretan como código de shell.
+
+```bash
+git config tunning.testCommands '[["python3", "-m", "unittest", "discover", "-s", "tests", "-v"]]'
+```
+
+Configura una suite en cada proyecto y submódulo que deba pasar pruebas antes
+de publicar. Los repositorios que no tengan runner ni esta preferencia
+conservan el flujo anterior y no ejecutan una suite.
+
+Esta configuración no elige una rama para los submódulos ni certifica las
+pruebas de otro proyecto. Si cambias el checkout de Tunning, reinstala la copia
+del motor antes de usar los alias. Los resultados se comprueban en local antes
+de publicar; los modos PR usan GitHub para gestionar issues y PR y consultar sus
+reglas. `git sync` conserva su flujo sin usar la API de GitHub.
 
 ## devup
 
@@ -144,10 +164,16 @@ Los tres binarios se instalan en `~/.local/bin`, con versiones y SHA256 oficiale
 ## Comprobaciones y documentación
 
 ```bash
-python3 scripts/verify.py
-python3 -m unittest discover -s tests -v
+python3 scripts/test-local.py --jobs 8
 ```
 
 Las pruebas usan repositorios y remotos Git temporales locales, configuraciones aisladas y sustitutos de los actualizadores. No instalan paquetes, no actualizan herramientas reales y no publican cambios en servidores.
+
+El runner verifica primero sintaxis y enlaces, y distribuye la suite entre
+procesos con la concurrencia indicada en `--jobs`. Ejecuta las comprobaciones
+en local, corrige los fallos y sube después de pasarlas. Tunning mantiene sus
+comprobaciones en la terminal, sin configuración `.github` ni publicación de
+estados de pruebas o criterios en GitHub. La [guía de PR](GIT-PR.md) explica
+cómo registrar evidencia local firmada y conservar las demás protecciones remotas.
 
 [VALIDACION-Ubuntu-26-WSL2.md](../VALIDACION-Ubuntu-26-WSL2.md) conserva el diagnóstico inicial y el estado de su reconciliación. [SETUP-Firebase-Ubuntu-26.md](../SETUP-Firebase-Ubuntu-26.md) documenta por separado WSL, Node y Firebase; sus versiones son una referencia histórica.

@@ -53,5 +53,6 @@ una lista breve de revisión visual. Registra las limitaciones observadas.
 Clonar Tunning por HTTPS no requiere SSH. Instalarlo no configura credenciales
 ni firma de otros repositorios. El alias conserva la rama de trabajo de cada
 repositorio: `main` para la principal pública de Tunning y `production` cuando
-sea la principal privada configurada por su propietario. No crea ni integra
-PR automáticamente. Consulta [Git sync](USO.md#git-sync).
+sea la principal privada configurada por su propietario. `git syncPR` prepara
+PR y `git syncPRmerge` exige pruebas locales, criterios y auditoría independiente
+para fusionarlos. Consulta [Git sync](USO.md#git-sync).

@@ -3,10 +3,31 @@
 [Guía de terminal](USO.md#git-sync)
 
 Los tres alias usan una sola copia de [scripts/git-sync.sh](../scripts/git-sync.sh).
-`git sync` conserva el flujo de equipo: confirma, integra y publica; no usa la
-API de GitHub ni modifica issues. `git syncPR` añade issues y PR en borrador,
+`git sync` conserva el flujo de equipo: confirma, integra, prueba en local y
+publica; no usa la API de GitHub ni modifica issues. `git syncPR` añade issues y PR en borrador,
 de hijos a padres, sin fusionarlos. `git syncPRmerge` prepara esos mismos PR y
-solo fusiona cuando pasan los criterios, CI y auditoría independiente.
+solo fusiona cuando pasan los criterios, las pruebas y la auditoría independiente.
+
+Las suites se ejecutan en la terminal antes del push. Si fallan, el comando
+conserva el trabajo y se detiene para corregirlo. Tunning mantiene sus
+comprobaciones en local, sin configuración `.github` ni estados de pruebas o
+criterios enviados a GitHub. La evidencia de aceptación y la auditoría
+independiente se validan también en la terminal antes de una fusión solicitada.
+Los modos PR siguen usando GitHub para gestionar issues, PR, revisiones y las
+demás reglas del repositorio.
+
+En Tunning, [scripts/test-local.py](../scripts/test-local.py) comprueba
+sintaxis/enlaces y reparte los tests entre procesos:
+
+```bash
+python3 scripts/test-local.py --jobs 8
+```
+
+Los alias detectan ese runner por repositorio. Para otras suites puedes fijar
+`tunning.testCommands` con un array JSON de comandos y argumentos, como explica
+la [guía de uso](USO.md#git-sync). La suite del padre no sustituye las pruebas
+de sus submódulos. Reinstala el motor tras modificarlo con
+`bash setup.sh --no-packages`.
 
 Los modos PR necesitan GitHub CLI (`gh`) autenticado con permisos de contenido,
 issues y PR. No instalan credenciales. La base predeterminada es la rama real
@@ -26,33 +47,52 @@ Sin `--issue`/`tunning.issue`, reutiliza el issue de la rama/base o crea uno
 con criterios pendientes. Reutiliza el PR abierto, conserva su descripción,
 publica las dependencias hijas y omite PR sin diferencias. Ni publicar ni
 pasar tests permite inferir que se cumplió cada requisito escrito en un issue.
+El responsable predeterminado es el propietario del repositorio. En los
+proyectos de JovannyCO, los issues y PR se asignan a JovannyCO. Puedes fijarlo
+con `git config --global tunning.responsible JovannyCO`; se añaden asignaciones
+sin retirar otros responsables y se comprueba que GitHub permita asignarlo.
 
 ## Criterios con evidencia
 
 Un issue necesita `## Criterios de aceptación` y casillas `- [ ]`/`- [x]`.
-El check **Criterios / criterios** rechaza casillas pendientes y exige un bloque
-JSON `tunning-evidence`: SHA del PR, SHA base, resumen de los criterios y
-explicación por criterio vinculada a CI aprobado de `tests.yml` para ese SHA.
+La comprobación local rechaza casillas pendientes y exige un bloque JSON
+`tunning-evidence`: SHA del PR, SHA base, resumen de los criterios y explicación
+por criterio vinculada a una auditoría local firmada y sus resultados.
 Editar el código, la base o los criterios invalida la evidencia anterior.
 
 Un responsable comprueba el contenido de cada criterio y prepara fuera del
 checkout un array JSON: `[{"id":"A1","detail":"Comando, resultado y caso comprobado"}, ...]`.
 Los IDs siguen el orden de las casillas de aceptación; deben cubrirlas todas.
-Después de terminar CI puede registrar esa evidencia y marcar las casillas:
+Después de pasar las pruebas y obtener el informe independiente firmado del SHA
+y base publicados, puede registrar esa evidencia y marcar las casillas:
 
 ```bash
 python3 scripts/check-issue-criteria.py --repository JovannyCO/Tunning --pr 12 \
-  --record /tmp/criterios-verificados.json --run 123456
+  --record /tmp/criterios-verificados.json --local-audit
 python3 scripts/check-issue-criteria.py --repository JovannyCO/Tunning --pr 12
 ```
 
 El registro no evalúa semánticamente las explicaciones: representa la revisión
-explícita del responsable y comprueba su cobertura/CI. No crea pruebas ni
-auditorías inexistentes. Tras actualizar el issue, vuelve a ejecutar el check
-de Criterios desde Actions; el evento de edición de un issue no reejecuta un
-check del PR. Para impedir también fusiones manuales configura este check y
-`terminal` como requeridos en las reglas de la rama. El check por sí solo no
-es una regla de protección.
+explícita del responsable y comprueba la cobertura y el informe configurado en
+`tunning.auditReport` con la política `tunning.prPolicy`. No crea pruebas ni
+auditorías inexistentes. El informe incluye comandos, resultados y hashes de
+logs; la evidencia vincula esos datos al SHA y base vigentes. No reutilices un
+informe de otro commit ni inventes identidad, firma o resultados.
+
+El registro actualiza el JSON de evidencia y las casillas del issue tras la
+validación local del informe firmado. Una nueva publicación o una base distinta
+exige repetir la validación. El motor bloquea la fusión si la evidencia no
+corresponde al estado actual, aunque las pruebas hayan pasado.
+
+Para Tunning, configura `checks: []` en la política porque todas sus suites se
+ejecutan en local. Sus reglas de rama conservan las demás restricciones acordadas, como
+la aplicación a administradores y la prohibición de force push. El motor no
+modifica ni omite reglas remotas: una regla de otro repositorio que exija un
+check sigue siendo obligatoria hasta que su responsable la cambie.
+
+`--record ... --run ID` conserva compatibilidad histórica para repositorios que
+usen CI. Esa opción no forma parte del flujo de Tunning ni reemplaza la
+auditoría independiente para fusionar.
 
 ## Política de auditoría
 
@@ -63,9 +103,8 @@ antes de auditar; el código de un PR no debe poder modificar esta política.
 
 ```json
 {
-  "commands": [["python3", "scripts/verify.py"], ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"]],
-  "checks": ["terminal", "criterios"],
-  "workflow": ".github/workflows/tests.yml",
+  "commands": [["python3", "scripts/test-local.py", "--jobs", "8"]],
+  "checks": [],
   "merge_method": "merge",
   "reviewers": [],
   "auditors": {
@@ -73,6 +112,12 @@ antes de auditar; el código de un PR no debe poder modificar esta política.
   }
 }
 ```
+
+El ejemplo acuerda suites locales sin checks de GitHub requeridos. Para otros
+repositorios, una política aprobada puede acordar checks remotos, comandos y
+revisores; no se cambia en silencio para hacer pasar un PR. El fingerprint y
+las identidades del ejemplo son marcadores: reemplázalos por datos comprobados
+antes de usar la política.
 
 Registra el proveedor y sesión del implementador con
 `tunning.implementerProvider` y `tunning.implementerSession`. El auditor usa
@@ -110,8 +155,10 @@ la herramienta no certifica que se trate de otra máquina física.
 
 ## Fusión y reanudación
 
-`git syncPRmerge` verifica CI, checks, revisiones acordadas, estado del PR,
-método permitido y SHA remoto/base inmediatamente antes de la llamada a GitHub.
+`git syncPRmerge` verifica pruebas y evidencia local, auditoría independiente,
+revisiones acordadas, estado del PR, método permitido y SHA remoto/base
+inmediatamente antes de la llamada a GitHub. En otros repositorios comprueba
+también los checks remotos que exija su política.
 Usa la condición `sha` del endpoint normal de merge; no emplea force ni
 admin override. GitHub aplica las protecciones y reglas adicionales del repo.
 No exige al autor autoaprobar su propio PR.
@@ -123,10 +170,11 @@ El progreso se guarda por repositorio en el directorio Git, en
 los ancestros, conserva las fusiones completadas y permite reanudar.
 Un merge hijo suele crear otro commit; el implementador publica la referencia
 actualizada del padre y se detiene para nuevas pruebas y auditoría del nuevo SHA.
-El modo automático usa merge en los hijos para avanzar sus ramas sin perder
-historia. Squash/rebase de hijos requieren actualización manual del
-implementador y nueva auditoría; se rechazan antes de fusionar automáticamente.
-En la raíz esos métodos conservan la rama de trabajo y sus commits publicados.
+Merge avanza la rama hija sin perder historia. Para squash/rebase, el motor
+comprueba el árbol resultante e integra ese resultado en la rama activa con
+un merge firmado, conservando los commits originales y publicándolo. El padre
+referencia ese nuevo HEAD publicado, que contiene el resultado fusionado, y
+necesita nueva evidencia/auditoría. Rebase exige historia lineal en el PR.
 
 La API condiciona el HEAD, pero no ofrece una comparación atómica del SHA base:
 si la base cambia durante la petición, se detecta al revisar los padres del
