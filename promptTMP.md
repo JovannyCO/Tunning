@@ -28,11 +28,10 @@ conserva mis preferencias, configuración, autenticación y claves existentes.
    `bash setup-cloudshell.sh --no-packages --target-dir RUTA_TEMPORAL`.
    Verifica que hay un solo bloque gestionado y que la inicialización de Google
    aparece antes de Tunning; no alteres `/google/devshell`.
-3. Ejecuta `python3 scripts/verify.py` y
-   `python3 -m unittest discover -s tests -v`. Si falta una dependencia,
-   identifica e instala únicamente la necesaria. Las pruebas deben utilizar
-   sus fixtures locales. Si hay un fallo, resuélvelo antes de instalar en mi
-   usuario y registra el cambio; no eludas la comprobación de hashes o firmas.
+3. Ejecuta `python3 scripts/verify.py`. Si falta una dependencia, identifica
+   e instala únicamente la necesaria. Si hay un fallo, resuélvelo antes de
+   instalar en mi usuario y registra el cambio; no eludas la comprobación de
+   hashes o firmas.
 4. Instala con `bash setup-cloudshell.sh`. Una instalación nueva usa Starship
    y extras sin Nerd Font; una existente conserva mi selección. No fuerces
    otro prompt ni una zona horaria diferente. Comprueba que los binarios de

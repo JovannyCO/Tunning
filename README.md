@@ -1,6 +1,6 @@
 # Tunning: terminal reproducible para Ubuntu, WSL2 y Cloud Shell
 
-[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) · [Pruebas locales](docs/USO.md#comprobaciones-y-documentación)
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) · [Comprobaciones locales](docs/USO.md#comprobaciones-y-documentación)
 
 [![Tunning: tu entorno listo para trabajar. Explora el proyecto de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software.](assets/tunning-jovanny-medina-cifuentes-header.png)](#de-una-terminal-nueva-a-un-entorno-de-trabajo)
 
@@ -25,7 +25,7 @@ Creé Tunning para conservar esa preparación en un repositorio público. Puedo 
 | Publicar un proyecto sin olvidar sus submódulos | `git sync` procesa primero los hijos y después sus padres, conservando sus ramas y la política de firma | [Sincronización Git](scripts/git-sync.sh) |
 | Mantener las herramientas al día | `devup` ofrece actualización completa o ligera y resume los errores | [Actualizador](scripts/devup.sh) |
 
-La solución incluye pruebas con instalaciones aisladas y repositorios Git temporales. Puedes revisar cómo responde ante conflictos, fallos de publicación y configuraciones incompletas en [las pruebas](tests/).
+Puedes inspeccionar los cambios con `--dry-run`, preparar una instalación aislada y revisar la sintaxis y los enlaces con [el verificador local](scripts/verify.py).
 
 ## Instalar Tunning
 
@@ -80,9 +80,9 @@ Puedes revisar esas decisiones en la [guía de uso](docs/USO.md) y en el [diagn�
 
 ### Desarrollador de Software
 
-Convierto esas decisiones en herramientas que se pueden ejecutar y mantener. En Tunning, el instalador guarda respaldos, los comandos tienen una implementación común y las pruebas ejercitan tanto el camino habitual como los fallos.
+Convierto esas decisiones en herramientas que se pueden ejecutar y mantener. En Tunning, el instalador guarda respaldos, los comandos tienen una implementación común y el verificador local comprueba sintaxis y enlaces.
 
-La evidencia está en el [instalador](scripts/install.py), el [comando Git sync](scripts/git-sync.sh), las [pruebas de terminal](tests/test_terminal.py) y las [pruebas de submódulos](tests/test_git_sync_submodules.py).
+Puedes revisar el [instalador](scripts/install.py), el [comando Git sync](scripts/git-sync.sh) y el [verificador local](scripts/verify.py).
 
 **¿Buscas un Analista de Sistemas o un Desarrollador de Software para tu equipo?** [Conversemos sobre lo que necesitas resolver](mailto:proyectos@Jovanny.CO). También puedes conocer otros proyectos en [mi perfil de GitHub](https://github.com/JovannyCO) y conectar conmigo en [LinkedIn](https://www.linkedin.com/in/jovannyCO/).
 
@@ -106,17 +106,13 @@ Sí. Descubre los submódulos recursivamente, valida el árbol y publica primero
 
 ### ¿Cómo puedo comprobar el proyecto antes de instalarlo?
 
-Puedes leer el [código del instalador](scripts/install.py), usar `--dry-run` o preparar una [instalación aislada](docs/USO.md#instalar-o-actualizar). Para ejecutar las pruebas:
+Puedes leer el [código del instalador](scripts/install.py), usar `--dry-run` o preparar una [instalación aislada](docs/USO.md#instalar-o-actualizar). Para comprobar sintaxis y enlaces locales:
 
 ```bash
-python3 scripts/test-local.py --jobs 8
+python3 scripts/verify.py
 ```
 
-El runner comprueba sintaxis y enlaces, y ejecuta la suite en procesos paralelos.
-Las pruebas usan repositorios, remotos y configuraciones temporales. No publican
-cambios en servidores ni actualizan tus herramientas reales. Se ejecutan en
-local antes de subir cambios. Tunning mantiene sus comprobaciones en la terminal,
-sin configuración `.github` ni estados de pruebas o criterios enviados a GitHub.
+Las comprobaciones se ejecutan en la terminal antes de publicar.
 
 ## Licencia y contribuciones
 

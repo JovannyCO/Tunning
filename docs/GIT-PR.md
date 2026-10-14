@@ -17,11 +17,13 @@ Los modos PR siguen usando GitHub para gestionar issues, PR, revisiones y las
 demás reglas del repositorio.
 
 En Tunning, [scripts/test-local.py](../scripts/test-local.py) comprueba
-sintaxis/enlaces y reparte los tests entre procesos:
+sintaxis/enlaces y reparte los tests de la suite entre procesos:
 
 ```bash
 python3 scripts/test-local.py --jobs 8
 ```
+
+El runner requiere una suite válida; un fallo bloquea el push.
 
 Los alias detectan ese runner por repositorio. Para otras suites puedes fijar
 `tunning.testCommands` con un array JSON de comandos y argumentos, como explica

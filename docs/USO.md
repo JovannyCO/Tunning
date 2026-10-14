@@ -164,16 +164,14 @@ Los tres binarios se instalan en `~/.local/bin`, con versiones y SHA256 oficiale
 ## Comprobaciones y documentación
 
 ```bash
-python3 scripts/test-local.py --jobs 8
+python3 scripts/verify.py
 ```
 
-Las pruebas usan repositorios y remotos Git temporales locales, configuraciones aisladas y sustitutos de los actualizadores. No instalan paquetes, no actualizan herramientas reales y no publican cambios en servidores.
-
-El runner verifica primero sintaxis y enlaces, y distribuye la suite entre
-procesos con la concurrencia indicada en `--jobs`. Ejecuta las comprobaciones
-en local, corrige los fallos y sube después de pasarlas. Tunning mantiene sus
-comprobaciones en la terminal, sin configuración `.github` ni publicación de
-estados de pruebas o criterios en GitHub. La [guía de PR](GIT-PR.md) explica
-cómo registrar evidencia local firmada y conservar las demás protecciones remotas.
+Este verificador comprueba sintaxis y enlaces locales sin ejecutar instaladores
+ni utilizar la red. Ejecuta las comprobaciones en local antes de publicar.
+Tunning mantiene sus comprobaciones en la terminal, sin configuración `.github`
+ni publicación de estados de pruebas o criterios en GitHub. La
+[guía de PR](GIT-PR.md) explica cómo registrar evidencia local firmada y conservar
+las demás protecciones remotas.
 
 [VALIDACION-Ubuntu-26-WSL2.md](../VALIDACION-Ubuntu-26-WSL2.md) conserva el diagnóstico inicial y el estado de su reconciliación. [SETUP-Firebase-Ubuntu-26.md](../SETUP-Firebase-Ubuntu-26.md) documenta por separado WSL, Node y Firebase; sus versiones son una referencia histórica.

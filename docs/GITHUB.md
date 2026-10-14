@@ -25,7 +25,7 @@ La descripción y los topics se guardan en GitHub, fuera de los archivos version
 
 Si cambia el alcance del proyecto, actualiza tanto estos metadatos como el README. Mantén el nombre profesional, los dos roles y los datos de contacto consistentes; evita repetir palabras clave sin aportar información.
 
-La [licencia MIT](../LICENSE), la [guía de contribución](../CONTRIBUTING.md), la [política de seguridad](../SECURITY.md) y el [runner de pruebas locales](../scripts/test-local.py) aportan condiciones de reutilización y comprobaciones reproducibles. Las pruebas se ejecutan en la terminal antes de publicar; la [guía de PR](GIT-PR.md) explica su evidencia y la auditoría independiente.
+La [licencia MIT](../LICENSE), la [guía de contribución](../CONTRIBUTING.md), la [política de seguridad](../SECURITY.md) y el [verificador local](../scripts/verify.py) aportan condiciones de reutilización y comprobaciones reproducibles. La [guía de uso](USO.md#comprobaciones-y-documentación) explica las comprobaciones locales; la [guía de PR](GIT-PR.md) detalla la evidencia y la auditoría independiente necesarias para publicar y fusionar.
 
 ## Alcance de la optimización
 
