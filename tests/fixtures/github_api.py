@@ -131,6 +131,8 @@ elif parts[0] == 'commits' and parts[2] == 'check-runs':
 elif parts[0] == 'commits' and parts[2] == 'statuses':
     result = [status for status in repo.get('statuses', []) if status.get('sha', parts[1]) == parts[1]]
 elif parts[0] == 'statuses' and method == 'POST':
+    if repo.get('forbid_status_writes'):
+        fail()
     if (len(parts) != 2 or not re.fullmatch(r'[a-f0-9]{40}', parts[1]) or
             data.get('state') not in ('pending', 'error', 'failure', 'success') or
             not isinstance(data.get('context'), str) or not data['context'].strip()):

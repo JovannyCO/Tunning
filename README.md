@@ -115,9 +115,8 @@ python3 scripts/test-local.py --jobs 8
 El runner comprueba sintaxis y enlaces, y ejecuta la suite en procesos paralelos.
 Las pruebas usan repositorios, remotos y configuraciones temporales. No publican
 cambios en servidores ni actualizan tus herramientas reales. Se ejecutan en
-local antes de subir cambios; los workflows de GitHub quedan disponibles solo
-para ejecución manual. Los modos PR envían los estados de esos resultados a
-GitHub para conservar las comprobaciones requeridas sin ejecutar Actions.
+local antes de subir cambios. Tunning mantiene sus comprobaciones en la terminal,
+sin configuración `.github` ni estados de pruebas o criterios enviados a GitHub.
 
 ## Licencia y contribuciones
 

@@ -131,9 +131,9 @@ conservan el flujo anterior y no ejecutan una suite.
 
 Esta configuración no elige una rama para los submódulos ni certifica las
 pruebas de otro proyecto. Si cambias el checkout de Tunning, reinstala la copia
-del motor antes de usar los alias. Los modos PR registran el estado `terminal`
-en GitHub para el SHA publicado y comprobado; `git sync` conserva su flujo
-sin usar la API de GitHub.
+del motor antes de usar los alias. Los resultados se comprueban en local antes
+de publicar; los modos PR usan GitHub para gestionar issues y PR y consultar sus
+reglas. `git sync` conserva su flujo sin usar la API de GitHub.
 
 ## devup
 
@@ -171,9 +171,9 @@ Las pruebas usan repositorios y remotos Git temporales locales, configuraciones 
 
 El runner verifica primero sintaxis y enlaces, y distribuye la suite entre
 procesos con la concurrencia indicada en `--jobs`. Ejecuta las comprobaciones
-en local, corrige los fallos y sube después de pasarlas. Los workflows de
-pruebas y criterios de GitHub solo permiten ejecución manual; los estados
-requeridos se registran desde la terminal. La [guía de PR](GIT-PR.md) explica
-cómo registrar evidencia local firmada y conservar las protecciones remotas.
+en local, corrige los fallos y sube después de pasarlas. Tunning mantiene sus
+comprobaciones en la terminal, sin configuración `.github` ni publicación de
+estados de pruebas o criterios en GitHub. La [guía de PR](GIT-PR.md) explica
+cómo registrar evidencia local firmada y conservar las demás protecciones remotas.
 
 [VALIDACION-Ubuntu-26-WSL2.md](../VALIDACION-Ubuntu-26-WSL2.md) conserva el diagnóstico inicial y el estado de su reconciliación. [SETUP-Firebase-Ubuntu-26.md](../SETUP-Firebase-Ubuntu-26.md) documenta por separado WSL, Node y Firebase; sus versiones son una referencia histórica.

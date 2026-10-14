@@ -32,8 +32,9 @@ bash setup.sh --no-packages --target-dir "$tunning_revision"
 
 Ejecuta y corrige las comprobaciones en local antes de publicar. El runner
 comprueba sintaxis/enlaces y distribuye la suite entre procesos, con un máximo
-de ocho trabajos en este equipo. Los workflows de pruebas y criterios son
-manuales; los estados de GitHub se registran desde la terminal responsable.
+de ocho trabajos en este equipo. Tunning mantiene las comprobaciones en la
+terminal, sin configuración `.github` ni publicación de estados de pruebas o
+criterios en GitHub.
 
 Usa destinos temporales únicos para pruebas; no ejecutes actualizadores o sync
 en proyectos del usuario como fixtures. No desactives firmas para eludir
@@ -49,9 +50,9 @@ fusiones PR automáticamente.
 `git sync`, `git syncPR` y `git syncPRmerge` comprueban el resultado local
 antes del push. Para otros proyectos configura sus suites mediante
 `tunning.testCommands`; no supongas que las pruebas de Tunning validan sus
-submódulos. Los modos PR registran el estado `terminal` tras publicar el SHA
-comprobado. La evidencia de criterios y la auditoría independiente siguen
-siendo necesarias: usa el SHA y la base reales, informes firmados y hashes de
+submódulos. La evidencia de criterios y la auditoría independiente se validan
+en local antes de una fusión solicitada: usa el SHA y la base reales,
+informes firmados y hashes de
 logs. No inventes informes ni marques requisitos pendientes solo porque pasaron
 las pruebas. Consulta [docs/GIT-PR.md](docs/GIT-PR.md).
 

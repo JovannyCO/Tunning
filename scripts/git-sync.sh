@@ -339,8 +339,6 @@ def criteria_command():
     gh = GitHub(Path.cwd(), OPTIONS.repository)
     pr = gh.api(f'pulls/{OPTIONS.pr}')
     issue_number = issue_for_pr(gh, pr)
-    if OPTIONS.local_audit:
-        local_status(gh, pr['head']['sha'], 'criterios', 'pending', 'Validando criterios y auditoría local firmada.')
     if OPTIONS.record:
         if bool(OPTIONS.run) == bool(OPTIONS.local_audit):
             fail(gh.path, '--record necesita --local-audit o --run, exclusivamente.')
@@ -374,7 +372,6 @@ def criteria_command():
         fresh = gh.api(f'pulls/{OPTIONS.pr}')
         if fresh['head']['sha'] != pr['head']['sha'] or fresh['base']['sha'] != pr['base']['sha']:
             fail(gh.path, 'El PR cambió durante la validación; repite la evidencia local.')
-        local_status(gh, pr['head']['sha'], 'criterios', 'success', 'Criterios y auditoría local firmada aprobados.')
     print(f'Criterios y evidencia OK: {gh.repository} PR #{OPTIONS.pr}, issue #{issue_number}, {pr["head"]["sha"]}.')
 
 
@@ -397,10 +394,6 @@ def save_state(repo, data):
     os.replace(temporary, path)
 
 
-def local_status(gh, sha, context, state, description):
-    gh.api(f'statuses/{sha}', 'POST', {'state': state, 'context': context, 'description': description})
-
-
 def test_commands(path):
     configured = value(path, 'tunning.testCommands')
     if configured is None:
@@ -417,10 +410,6 @@ def test_before_push(repo):
     repo.test_results = []
     if not commands:
         return
-    known = MODE in ('syncPR', 'syncPRmerge') and heads(
-        repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') == head(repo.path)
-    if known:
-        local_status(repo.github, head(repo.path), 'terminal', 'pending', 'Ejecutando las suites locales antes del push.')
     before = audit_snapshot(repo.path)
     directory = Path(tempfile.mkdtemp(prefix='tunning-push-tests-'))
     print(f'=> [{label(repo.path)}] Pruebas locales antes del push; logs: {directory}', flush=True)
@@ -439,12 +428,8 @@ def test_before_push(repo):
         repo.test_results.append({'argv': command, 'returncode': returncode, 'log_sha256': log_hash.hexdigest(),
                                   'log': str(logfile), 'seconds': round(time.monotonic() - started, 3)})
         if returncode:
-            if known:
-                local_status(repo.github, before['head'], 'terminal', 'failure', 'Las suites locales fallaron; publicación bloqueada.')
             fail(repo.path, f'Pruebas locales fallidas (código {returncode}); no se publica. Log: {logfile}')
     if audit_snapshot(repo.path) != before:
-        if known:
-            local_status(repo.github, before['head'], 'terminal', 'failure', 'Las pruebas modificaron el checkout; publicación bloqueada.')
         fail(repo.path, 'Las pruebas modificaron HEAD, índice o archivos; no se publica y se conservan los cambios.')
     clean(repo)
 
@@ -511,7 +496,7 @@ def pr_publish(repo):
     block = '<!-- tunning-sync:start -->\n' + f'Rama `{repo.branch}` → `{repo.base}`; SHA `{sha}`.\n\n'
     block += f'Closes #{repo.issue}\n\n'
     block += 'Dependencias hijas: ' + (json.dumps(children, ensure_ascii=True) if children else 'ninguna')
-    block += '\n\nLos criterios, CI y la auditoría deben corresponder a este SHA y base.\n<!-- tunning-sync:end -->'
+    block += '\n\nLas pruebas locales, los criterios y la auditoría deben corresponder a este SHA y base.\n<!-- tunning-sync:end -->'
     if existing:
         body = existing.get('body') or ''
         # Conservar la descripción humana y su única referencia de cierre.
@@ -526,7 +511,6 @@ def pr_publish(repo):
     gh.api(f'issues/{pr["number"]}/assignees', 'POST', {'assignees': [repo.responsible]})
     PRS[repo.path] = pr
     state = read_state(repo)
-    changed = state.get('sha') != sha or state.get('base_sha') != repo.base_sha
     state.update({'schema': 1, 'path': str(repo.path), 'repository': gh.repository, 'branch': repo.branch,
                   'base': repo.base, 'sha': sha, 'base_sha': repo.base_sha, 'issue': repo.issue,
                   'pr': pr['number'], 'children': children,
@@ -536,9 +520,6 @@ def pr_publish(repo):
                                   'identity': git(repo.path, 'log', '-1', '--format=%an <%ae>').stdout.strip()}})
     if getattr(repo, 'test_results', None):
         state['local_tests'] = {'sha': sha, 'results': repo.test_results}
-        local_status(gh, sha, 'terminal', 'success', 'Suites locales aprobadas antes del push.')
-        if changed:
-            local_status(gh, sha, 'criterios', 'pending', 'Pendientes criterios y auditoría firmada del SHA/base vigentes.')
     # No reciclar la aprobación de otro SHA/base, aunque quede un informe en disco.
     state.pop('audit', None)
     save_state(repo, state)
@@ -781,8 +762,9 @@ def audit_policy(repo):
     if (not isinstance(commands, list) or not commands or
             any(not isinstance(c, list) or not c or any(not isinstance(a, str) or not a for a in c) for c in commands)):
         fail(repo.path, 'La política debe acordar comandos de prueba como arrays de argumentos.')
-    if not policy.get('checks') or not policy.get('auditors'):
-        fail(repo.path, 'La política necesita checks e identidades/fingerprints de auditores autorizados.')
+    if (not isinstance(policy.get('checks'), list) or
+            any(not isinstance(c, str) or not c for c in policy['checks']) or not policy.get('auditors')):
+        fail(repo.path, 'La política necesita checks como array (vacío para validación local) y auditores autorizados.')
     policy['_sha256'] = digest(raw)
     return policy
 
@@ -923,7 +905,7 @@ def merge_checks(repo, pr, policy):
         latest.setdefault(status['context'], status['state'])
     observed = {c['name']: c.get('conclusion') if c.get('status') == 'completed' else 'pending' for c in checks}
     observed.update(latest)
-    if (not observed or any(s != 'success' for s in observed.values()) or
+    if ((not observed and policy['checks']) or any(s != 'success' for s in observed.values()) or
             any(c.get('status') != 'completed' or c.get('conclusion') != 'success' for c in checks)):
         fail(repo.path, 'Checks pendientes, fallidos, omitidos o ausentes; no se fusiona.')
     missing = set(policy['checks']) - set(observed)

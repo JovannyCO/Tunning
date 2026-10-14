@@ -22,17 +22,17 @@ un fallo funcional. Para cambios visuales, indica qué interfaz revisaste.
 
 Ejecuta las comprobaciones en local, corrige los fallos y publica después de
 pasarlas. El runner verifica sintaxis/enlaces y distribuye la suite entre
-procesos; `--jobs` permite ajustar la concurrencia a tu equipo. Los workflows
-de GitHub solo se ejecutan manualmente. `git sync` y los modos PR comprueban
-las suites locales antes del push; tras cambiar el motor reinstala la copia
+procesos; `--jobs` permite ajustar la concurrencia a tu equipo. Tunning mantiene
+estas comprobaciones en la terminal, sin configuración `.github` ni publicación
+de estados de pruebas o criterios en GitHub. `git sync` y los modos PR
+comprueban las suites locales antes del push; tras cambiar el motor reinstala la copia
 con `bash setup.sh --no-packages`.
 
-Los modos PR registran en GitHub el estado `terminal` del SHA comprobado.
-Pasar las pruebas no completa por sí solo los criterios de aceptación: el
-estado `criterios` requiere evidencia del SHA y base vigentes y una auditoría
-independiente firmada. Consulta [la política de PR](docs/GIT-PR.md). Las
-protecciones remotas siguen aplicándose; el motor no usa excepciones de
-administrador para fusionar.
+Pasar las pruebas no completa por sí solo los criterios de aceptación. Antes
+de una fusión solicitada, el motor valida en local la evidencia del SHA y base
+vigentes y una auditoría independiente firmada. Consulta [la política de
+PR](docs/GIT-PR.md). Las revisiones y demás protecciones remotas siguen
+aplicándose; el motor no usa excepciones de administrador para fusionar.
 
 Tus contribuciones se distribuyen bajo [MIT](LICENSE), conservando los avisos
 de autor y licencia. Las herramientas externas mantienen sus propias licencias.

@@ -16,7 +16,8 @@ class GitPRFixture(GitFixture):
         self.work = self.root / 'work with spaces'
         previous.rename(self.work)
         self.api_file = self.root / 'github.json'
-        self.api_file.write_text(json.dumps({'repositories': {'fixture/parent': {'remote': str(self.remote)}}}))
+        self.api_file.write_text(json.dumps({'repositories': {'fixture/parent': {
+            'remote': str(self.remote), 'forbid_status_writes': True}}}))
         self.env['TUNNING_TEST_GITHUB'] = str(self.api_file)
         binary = self.script(self.root / 'bin/gh', '#!/bin/sh\nexec /usr/bin/python3 ' +
                              shlex.quote(str(REPO / 'tests/fixtures/github_api.py')) + ' "$@"\n')
@@ -36,6 +37,10 @@ class GitPRFixture(GitFixture):
         data = self.api()
         update(data['repositories']['fixture/parent'])
         self.api_file.write_text(json.dumps(data))
+
+    def assert_no_status_publications(self):
+        self.assertFalse(any(call['method'] == 'POST' and call['path'].startswith('statuses/')
+                             for call in self.api().get('calls', [])))
 
     def criterion_command(self, *args):
         return execute(['python3', REPO / 'scripts/check-issue-criteria.py', '--repository',
@@ -63,7 +68,7 @@ class GitPRTests(GitPRFixture):
                 api = self.api()['repositories']['fixture/parent']
                 self.assertNotIn('prs', api)
                 self.assertNotIn('issues', api)
-                self.assertFalse(any(status['state'] == 'success' for status in api.get('statuses', [])))
+                self.assert_no_status_publications()
 
     def assert_mutating_suite_blocks_push(self, command):
         self.git('config', 'tunning.testCommands', json.dumps([command]))
@@ -101,7 +106,7 @@ class GitPRTests(GitPRFixture):
                 self.assertEqual(self.initial, self.remote_head())
                 self.assertNotIn('prs', self.api()['repositories']['fixture/parent'])
 
-    def test_failed_revalidation_of_published_sha_replaces_terminal_success(self):
+    def test_failed_revalidation_of_published_sha_keeps_remote_without_status_publications(self):
         self.git('config', 'tunning.testCommands', json.dumps([['python3', '-c', 'print("tests passed")']]))
         self.modify()
         self.git('syncPR')
@@ -111,9 +116,7 @@ class GitPRTests(GitPRFixture):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(published, self.git('rev-parse', 'HEAD').stdout.strip())
         self.assertEqual(published, self.remote_head('8-work'))
-        statuses = [status for status in self.api()['repositories']['fixture/parent']['statuses']
-                    if status['sha'] == published and status['context'] == 'terminal']
-        self.assertEqual([status['state'] for status in statuses], ['failure', 'pending', 'success'])
+        self.assert_no_status_publications()
 
     def test_create_and_reuse_single_issue_pr_literal_message(self):
         self.modify()
@@ -132,6 +135,7 @@ class GitPRTests(GitPRFixture):
         self.assertFalse(api['prs'][0]['merged'])
         self.assertEqual(api['issues'][0]['assignees'], ['fixture'])
         self.assertEqual(api['prs'][0]['assignees'], ['fixture'])
+        self.assert_no_status_publications()
 
     def test_custom_responsible_preserves_other_assignees(self):
         self.git('config', 'tunning.responsible', 'JovannyCO')
@@ -199,15 +203,13 @@ class GitPRTests(GitPRFixture):
         self.assertEqual(self.criterion_command().returncode, 0)
         self.assertFalse(self.api()['repositories']['fixture/parent']['prs'][0]['merged'])
 
-    def test_local_status_cannot_be_published_from_legacy_ci_without_an_audit(self):
+    def test_local_mode_rejects_legacy_ci_without_an_audit(self):
         self.modify()
         self.git('syncPR')
         self.assertEqual(self.evidence().returncode, 0)
         result = self.criterion_command('--local-audit')
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        statuses = self.api()['repositories']['fixture/parent'].get('statuses', [])
-        self.assertFalse(any(status['context'] == 'criterios' and status['state'] == 'success'
-                             for status in statuses))
+        self.assert_no_status_publications()
 
     def test_evidence_stale_after_push(self):
         self.modify()
@@ -349,7 +351,7 @@ class LocalCriteriaTests(AuditFixture):
     def prepare_local_evidence(self):
         commands = [['python3', '-c', 'print("local prepush tests OK")']]
         self.git('config', 'tunning.testCommands', json.dumps(commands))
-        self.make_policy(commands=commands, checks=['terminal', 'criterios'])
+        self.make_policy(commands=commands, checks=[])
         self.modify()
         self.git('syncPR')
         result = self.run_audit('--approve')
@@ -370,9 +372,9 @@ class LocalCriteriaTests(AuditFixture):
         after = self.api()['repositories']['fixture/parent']['issues'][0]['body']
         self.assertEqual(before, after)
 
-    def test_signed_local_evidence_records_checks_and_merges_without_actions(self):
+    def test_signed_local_evidence_records_and_merges_without_actions_or_statuses(self):
         self.prepare_local_evidence()
-        self.update_api(lambda r: r.update(checks=[]))
+        self.update_api(lambda r: r.update(checks=[], statuses=[]))
         result = self.record_local()
         self.assertEqual(result.returncode, 0, result.stderr)
         body = self.api()['repositories']['fixture/parent']['issues'][0]['body']
@@ -393,9 +395,8 @@ class LocalCriteriaTests(AuditFixture):
         self.assertNotIn('runs', api['repositories']['fixture/parent'])
         self.assertFalse(any(c['path'].startswith('actions/') for c in api['calls']))
         self.assertTrue(api['repositories']['fixture/parent']['prs'][0]['merged'])
-        statuses = api['repositories']['fixture/parent']['statuses']
-        contexts = {status['context'] for status in statuses if status['sha'] == original and status['state'] == 'success'}
-        self.assertEqual(contexts, {'terminal', 'criterios'})
+        self.assertEqual(api['repositories']['fixture/parent']['statuses'], [])
+        self.assert_no_status_publications()
 
     def test_local_record_requires_the_external_report_and_signature(self):
         self.prepare_local_evidence()
@@ -448,17 +449,15 @@ class LocalCriteriaTests(AuditFixture):
         result = self.criterion_command()
         self.assertNotEqual(result.returncode, 0, result.stdout)
 
-    def test_failed_local_revalidation_replaces_previous_criteria_success(self):
+    def test_failed_local_revalidation_keeps_issue_without_status_publications(self):
         self.prepare_local_evidence()
         self.assertEqual(self.record_local().returncode, 0)
-        published = self.git('rev-parse', 'HEAD').stdout.strip()
+        before = self.api()['repositories']['fixture/parent']['issues'][0]['body']
         Path(str(self.report) + '.asc').unlink()
         result = self.criterion_command('--local-audit')
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        statuses = [status for status in self.api()['repositories']['fixture/parent']['statuses']
-                    if status['sha'] == published and status['context'] == 'criterios']
-        self.assertEqual(statuses[0]['state'], 'pending')
-        self.assertTrue(any(status['state'] == 'success' for status in statuses[1:]))
+        self.assertEqual(before, self.api()['repositories']['fixture/parent']['issues'][0]['body'])
+        self.assert_no_status_publications()
 
     def test_local_policy_still_blocks_existing_failed_checks(self):
         self.prepare_local_evidence()
@@ -497,7 +496,7 @@ class PRTreeFixture(GitPRFixture):
         self.git('config', '--file', self.env['GIT_CONFIG_GLOBAL'], 'url.' + str(child['remote']) + '.insteadOf', url)
         self.git('remote', 'set-url', 'origin', url, cwd=child['path'])
         data = self.api()
-        data['repositories'][name] = {'remote': str(child['remote'])}
+        data['repositories'][name] = {'remote': str(child['remote']), 'forbid_status_writes': True}
         self.api_file.write_text(json.dumps(data))
         child['repository'] = name
         return child
