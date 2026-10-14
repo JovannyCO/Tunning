@@ -13,12 +13,12 @@ Consulta [AGENTS.md](AGENTS.md) y [la compatibilidad](docs/COMPATIBILIDAD.md).
 Para revisar sintaxis y enlaces locales:
 
 ```bash
-python3 scripts/verify.py
+bash scripts/verify.sh
 ```
 
-La verificación estática requiere Python 3.11 o posterior y Bash. Prueba una
-instalación aislada si cambias el instalador. Para cambios visuales, indica
-qué interfaz revisaste.
+La verificación estática requiere Bash, awk y las herramientas básicas de
+Ubuntu. Prueba una instalación aislada si cambias el instalador. Para cambios
+visuales, indica qué interfaz revisaste.
 
 Ejecuta las comprobaciones en local, corrige los fallos y publica después de
 pasarlas. Tunning mantiene estas comprobaciones en la terminal, sin

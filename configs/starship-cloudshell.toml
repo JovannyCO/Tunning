@@ -18,7 +18,6 @@ $git_branch\
 $git_status\
 $fill\
 $nodejs\
-$python\
 $rust\
 $golang\
 $java\
@@ -76,10 +75,6 @@ style  = "#49454F"
 [nodejs]
 format = "[ node $version ]($style)"
 style  = "bg:#2B2930 fg:#68A063 bold"
-
-[python]
-format = "[ py $version ]($style)"
-style  = "bg:#2B2930 fg:#FFDE57 bold"
 
 [rust]
 format = "[ rs $version ]($style)"

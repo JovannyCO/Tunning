@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-command -v python3 >/dev/null || { echo 'Instala python3: sudo apt-get install -y python3' >&2; exit 1; }
-exec python3 "$SCRIPT_DIR/scripts/install.py" "$@"
+DIRECTORIO_INSTALADOR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+    echo 'Se requiere Bash 4.4 o posterior para instalar Tunning.' >&2
+    exit 1
+fi
+exec bash "$DIRECTORIO_INSTALADOR/scripts/install.sh" "$@"

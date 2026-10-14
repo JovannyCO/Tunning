@@ -20,16 +20,16 @@ Creé Tunning para conservar esa preparación en un repositorio público. Puedo 
 
 | Lo que necesitas resolver | Lo que aporta Tunning | Dónde comprobarlo |
 |---|---|---|
-| Volver a trabajar sin reconstruir cada ajuste | Instalación que detecta el entorno, conserva preferencias y respalda los archivos que reemplaza | [Instalador](scripts/install.py) |
+| Volver a trabajar sin reconstruir cada ajuste | Instalación que detecta el entorno, conserva preferencias y respalda los archivos que reemplaza | [Instalador](scripts/install.sh) |
 | Saber dónde estás y si un comando falló | Prompt con directorio, rama Git, reloj y estado del último comando | [Prompt Bash](configs/prompt-bash.sh) |
 | Publicar un proyecto sin olvidar sus submódulos | `git sync` procesa primero los hijos y después sus padres, conservando sus ramas y la política de firma | [Sincronización Git](scripts/git-sync.sh) |
 | Mantener las herramientas al día | `devup` ofrece actualización completa o ligera y resume los errores | [Actualizador](scripts/devup.sh) |
 
-Puedes inspeccionar los cambios con `--dry-run`, preparar una instalación aislada y revisar la sintaxis y los enlaces con [el verificador local](scripts/verify.py).
+Puedes inspeccionar los cambios con `--dry-run`, preparar una instalación aislada y revisar la sintaxis y los enlaces con [el verificador local](scripts/verify.sh).
 
 ## Instalar Tunning
 
-En Ubuntu 26.04, con **Git y Python 3** disponibles:
+En Ubuntu 26.04, con **Bash y Git** disponibles:
 
 ```bash
 git clone https://github.com/JovannyCO/Tunning.git
@@ -82,7 +82,7 @@ Puedes revisar esas decisiones en la [guía de uso](docs/USO.md) y en el [diagn�
 
 Convierto esas decisiones en herramientas que se pueden ejecutar y mantener. En Tunning, el instalador guarda respaldos, los comandos tienen una implementación común y el verificador local comprueba sintaxis y enlaces.
 
-Puedes revisar el [instalador](scripts/install.py), el [comando Git sync](scripts/git-sync.sh) y el [verificador local](scripts/verify.py).
+Puedes revisar el [instalador](scripts/install.sh), el [comando Git sync](scripts/git-sync.sh) y el [verificador local](scripts/verify.sh).
 
 **¿Buscas un Analista de Sistemas o un Desarrollador de Software para tu equipo?** [Conversemos sobre lo que necesitas resolver](mailto:proyectos@Jovanny.CO). También puedes conocer otros proyectos en [mi perfil de GitHub](https://github.com/JovannyCO) y conectar conmigo en [LinkedIn](https://www.linkedin.com/in/jovannyCO/).
 
@@ -106,10 +106,10 @@ Sí. Descubre los submódulos recursivamente, valida el árbol y publica primero
 
 ### ¿Cómo puedo comprobar el proyecto antes de instalarlo?
 
-Puedes leer el [código del instalador](scripts/install.py), usar `--dry-run` o preparar una [instalación aislada](docs/USO.md#instalar-o-actualizar). Para comprobar sintaxis y enlaces locales:
+Puedes leer el [código del instalador](scripts/install.sh), usar `--dry-run` o preparar una [instalación aislada](docs/USO.md#instalar-o-actualizar). Para comprobar sintaxis y enlaces locales:
 
 ```bash
-python3 scripts/verify.py
+bash scripts/verify.sh
 ```
 
 Las comprobaciones se ejecutan en la terminal antes de publicar.

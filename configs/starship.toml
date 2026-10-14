@@ -14,7 +14,6 @@ $git_status\
 $fill\
 [](fg:#2B2930)\
 $nodejs\
-$python\
 $rust\
 $golang\
 $java\
@@ -83,11 +82,6 @@ style  = "#49454F"
 format = "[ $symbol$version ]($style)"
 style  = "bg:#2B2930 fg:#68A063 bold"
 symbol = "󰎙 "
-
-[python]
-format = "[ $symbol$version ]($style)"
-style  = "bg:#2B2930 fg:#FFDE57 bold"
-symbol = " "
 
 [rust]
 format = "[ $symbol$version ]($style)"
