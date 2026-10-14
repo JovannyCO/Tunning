@@ -15,6 +15,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 
 
@@ -36,6 +37,8 @@ remota de las referencias hijas, también con --recurse-submodules=check.
 Los modos PR necesitan gh autenticado en github.com y una rama distinta de
 la base (tunning.prBase o rama predeterminada real). No crean ramas arbitrarias.
 Política/auditorías: tunning.prPolicy y tunning.auditReport, fuera del checkout.
+Pruebas antes de publicar: tunning.testCommands (JSON de arrays de argumentos)
+o scripts/test-local.py cuando existe; un fallo bloquea el push y sus padres.
 Ver docs/GIT-PR.md para evidencia, firmas, pruebas y reanudación.
 '''
 MODE = 'sync'
@@ -54,6 +57,7 @@ if MODE != 'sync':
     parser.add_argument('--pr', type=int)
     parser.add_argument('--record', type=Path)
     parser.add_argument('--run', type=int)
+    parser.add_argument('--local-audit', action='store_true')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--provider')
     parser.add_argument('--session')
@@ -269,6 +273,18 @@ def successful_run(gh, run_id, sha, workflow):
     return run
 
 
+def local_criteria_audit(gh, pr, issue_number, rows):
+    repo = Repo(gh.path)
+    repo.github, repo.issue = gh, issue_number
+    clean(repo)
+    if head(repo.path) != pr['head']['sha']:
+        fail(repo.path, 'El checkout no corresponde al SHA vigente del PR.')
+    audit = verified_audit(repo, pr, audit_policy(repo))
+    if audit['report'].get('criteria_sha256') != digest(canonical([(n, t) for n, _, t in rows])):
+        fail(repo.path, 'La auditoría no cubre los criterios vigentes del issue.')
+    return audit
+
+
 def check_criteria(gh, pr, issue_number, workflow='.github/workflows/tests.yml'):
     issue = gh.api(f'issues/{int(issue_number)}')
     rows = criteria(issue.get('body'), gh.path)
@@ -284,11 +300,24 @@ def check_criteria(gh, pr, issue_number, workflow='.github/workflows/tests.yml')
     if (not isinstance(entries, list) or len(entries) != len(rows) or
             {e.get('id') for e in entries if isinstance(e, dict)} != {n for n, _, _ in rows}):
         fail(gh.path, 'La evidencia no cubre exactamente todos los criterios.')
+    local = proof.get('source') == 'local-audit'
+    if proof.get('source') not in (None, 'local-audit'):
+        fail(gh.path, 'Fuente de evidencia desconocida.')
     runs = set()
     for entry in entries:
-        if not isinstance(entry.get('detail'), str) or not entry['detail'].strip() or not isinstance(entry.get('run'), int):
+        if not isinstance(entry.get('detail'), str) or not entry['detail'].strip():
             fail(gh.path, f'Evidencia incompleta para {entry.get("id")}.')
-        runs.add(entry['run'])
+        if local:
+            if entry.get('audit_report_sha256') != proof.get('audit', {}).get('report_sha256'):
+                fail(gh.path, 'La evidencia no corresponde al informe local registrado.')
+        elif not isinstance(entry.get('run'), int):
+            fail(gh.path, f'Evidencia incompleta para {entry.get("id")}.')
+        else:
+            runs.add(entry['run'])
+    if local:
+        audit = local_criteria_audit(gh, pr, issue_number, rows)
+        if proof.get('audit') != {k: audit[k] for k in ('fingerprint', 'report_sha256')}:
+            fail(gh.path, 'La evidencia no corresponde a la auditoría local firmada vigente.')
     for run_id in runs:
         successful_run(gh, run_id, pr['head']['sha'], workflow)
     return proof
@@ -310,10 +339,13 @@ def criteria_command():
     gh = GitHub(Path.cwd(), OPTIONS.repository)
     pr = gh.api(f'pulls/{OPTIONS.pr}')
     issue_number = issue_for_pr(gh, pr)
+    if OPTIONS.local_audit:
+        local_status(gh, pr['head']['sha'], 'criterios', 'pending', 'Validando criterios y auditoría local firmada.')
     if OPTIONS.record:
-        if not OPTIONS.run:
-            fail(gh.path, '--record necesita --run con CI ya aprobado para el SHA vigente.')
-        successful_run(gh, OPTIONS.run, pr['head']['sha'], '.github/workflows/tests.yml')
+        if bool(OPTIONS.run) == bool(OPTIONS.local_audit):
+            fail(gh.path, '--record necesita --local-audit o --run, exclusivamente.')
+        if OPTIONS.run:
+            successful_run(gh, OPTIONS.run, pr['head']['sha'], '.github/workflows/tests.yml')
         issue = gh.api(f'issues/{issue_number}')
         rows = criteria(issue.get('body'), gh.path)
         entries = json.loads(OPTIONS.record.read_text())
@@ -322,15 +354,27 @@ def criteria_command():
                 any(not isinstance(e.get('detail'), str) or not e['detail'].strip() for e in entries)):
             fail(gh.path, '--record exige una explicación verificable para cada criterio; no se deduce del push.')
         proof = {'schema': 1, 'repository': gh.repository, 'sha': pr['head']['sha'],
-                 'base_sha': pr['base']['sha'], 'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows])),
-                 'criteria': [dict(e, run=OPTIONS.run) for e in entries]}
+                 'base_sha': pr['base']['sha'], 'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows]))}
+        if OPTIONS.local_audit:
+            audit = local_criteria_audit(gh, pr, issue_number, rows)
+            proof.update(source='local-audit', audit={k: audit[k] for k in ('fingerprint', 'report_sha256')},
+                         criteria=[dict(e, audit_report_sha256=audit['report_sha256']) for e in entries])
+        else:
+            proof['criteria'] = [dict(e, run=OPTIONS.run) for e in entries]
         body = re.sub(r'(?ms)^```tunning-evidence\s*\n.*?^```\s*$', '', issue['body']).rstrip()
         section = re.search(r'^## Criterios de aceptación\s*\n(.*?)(?=^## |\Z)', body, re.M | re.S)
         checked = re.sub(r'^- \[[ xX]\]', '- [x]', section[1], flags=re.M)
         body = body[:section.start(1)] + checked + body[section.end(1):]
         body += '\n\n```tunning-evidence\n' + json.dumps(proof, ensure_ascii=False, indent=2) + '\n```\n'
         gh.api(f'issues/{issue_number}', 'PATCH', {'body': body})
-    check_criteria(gh, pr, issue_number)
+    proof = check_criteria(gh, pr, issue_number)
+    if OPTIONS.local_audit:
+        if proof.get('source') != 'local-audit':
+            fail(gh.path, '--local-audit exige evidencia de una auditoría local firmada, no de Actions.')
+        fresh = gh.api(f'pulls/{OPTIONS.pr}')
+        if fresh['head']['sha'] != pr['head']['sha'] or fresh['base']['sha'] != pr['base']['sha']:
+            fail(gh.path, 'El PR cambió durante la validación; repite la evidencia local.')
+        local_status(gh, pr['head']['sha'], 'criterios', 'success', 'Criterios y auditoría local firmada aprobados.')
     print(f'Criterios y evidencia OK: {gh.repository} PR #{OPTIONS.pr}, issue #{issue_number}, {pr["head"]["sha"]}.')
 
 
@@ -351,6 +395,58 @@ def save_state(repo, data):
         json.dump(data, tmp, ensure_ascii=True, indent=2)
         temporary = Path(tmp.name)
     os.replace(temporary, path)
+
+
+def local_status(gh, sha, context, state, description):
+    gh.api(f'statuses/{sha}', 'POST', {'state': state, 'context': context, 'description': description})
+
+
+def test_commands(path):
+    configured = value(path, 'tunning.testCommands')
+    if configured is None:
+        return [['python3', 'scripts/test-local.py']] if (path / 'scripts/test-local.py').is_file() else []
+    commands = json.loads(configured)
+    if (not isinstance(commands, list) or not commands or
+            any(not isinstance(c, list) or not c or any(not isinstance(a, str) or not a for a in c) for c in commands)):
+        fail(path, 'tunning.testCommands necesita un JSON no vacío de arrays de argumentos.')
+    return commands
+
+
+def test_before_push(repo):
+    commands = test_commands(repo.path)
+    repo.test_results = []
+    if not commands:
+        return
+    known = MODE in ('syncPR', 'syncPRmerge') and heads(
+        repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') == head(repo.path)
+    if known:
+        local_status(repo.github, head(repo.path), 'terminal', 'pending', 'Ejecutando las suites locales antes del push.')
+    before = audit_snapshot(repo.path)
+    directory = Path(tempfile.mkdtemp(prefix='tunning-push-tests-'))
+    print(f'=> [{label(repo.path)}] Pruebas locales antes del push; logs: {directory}', flush=True)
+    for number, command in enumerate(commands, 1):
+        started = time.monotonic()
+        logfile = directory / f'{number}.log'
+        log_hash = hashlib.sha256()
+        with logfile.open('wb') as log:
+            with subprocess.Popen(command, cwd=repo.path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'GIT_OPTIONAL_LOCKS': '0'}) as run:
+                for line in run.stdout:
+                    log.write(line)
+                    log_hash.update(line)
+                    print(line.decode('utf-8', errors='replace'), end='', flush=True)
+                returncode = run.wait()
+        repo.test_results.append({'argv': command, 'returncode': returncode, 'log_sha256': log_hash.hexdigest(),
+                                  'log': str(logfile), 'seconds': round(time.monotonic() - started, 3)})
+        if returncode:
+            if known:
+                local_status(repo.github, before['head'], 'terminal', 'failure', 'Las suites locales fallaron; publicación bloqueada.')
+            fail(repo.path, f'Pruebas locales fallidas (código {returncode}); no se publica. Log: {logfile}')
+    if audit_snapshot(repo.path) != before:
+        if known:
+            local_status(repo.github, before['head'], 'terminal', 'failure', 'Las pruebas modificaron el checkout; publicación bloqueada.')
+        fail(repo.path, 'Las pruebas modificaron HEAD, índice o archivos; no se publica y se conservan los cambios.')
+    clean(repo)
 
 
 def pr_prepare(repo):
@@ -430,6 +526,7 @@ def pr_publish(repo):
     gh.api(f'issues/{pr["number"]}/assignees', 'POST', {'assignees': [repo.responsible]})
     PRS[repo.path] = pr
     state = read_state(repo)
+    changed = state.get('sha') != sha or state.get('base_sha') != repo.base_sha
     state.update({'schema': 1, 'path': str(repo.path), 'repository': gh.repository, 'branch': repo.branch,
                   'base': repo.base, 'sha': sha, 'base_sha': repo.base_sha, 'issue': repo.issue,
                   'pr': pr['number'], 'children': children,
@@ -437,6 +534,11 @@ def pr_publish(repo):
                   'implementer': {'provider': value(repo.path, 'tunning.implementerProvider'),
                                   'session': value(repo.path, 'tunning.implementerSession'),
                                   'identity': git(repo.path, 'log', '-1', '--format=%an <%ae>').stdout.strip()}})
+    if getattr(repo, 'test_results', None):
+        state['local_tests'] = {'sha': sha, 'results': repo.test_results}
+        local_status(gh, sha, 'terminal', 'success', 'Suites locales aprobadas antes del push.')
+        if changed:
+            local_status(gh, sha, 'criterios', 'pending', 'Pendientes criterios y auditoría firmada del SHA/base vigentes.')
     # No reciclar la aprobación de otro SHA/base, aunque quede un informe en disco.
     state.pop('audit', None)
     save_state(repo, state)
@@ -455,6 +557,7 @@ class Repo:
             fail(self.path, f'La rama configurada {self.branch!r} está activa en otro worktree: {worktree}.')
 
     def validate(self, parent=None, name=None):
+        test_commands(self.path)  # Rechazar preferencias inválidas antes del staging.
         actual = Path(git(self.path, 'rev-parse', '--show-toplevel').stdout.removesuffix('\n')).resolve()
         if actual != self.path:
             fail(self.path, 'No es un checkout independiente del submódulo.')
@@ -820,7 +923,8 @@ def merge_checks(repo, pr, policy):
         latest.setdefault(status['context'], status['state'])
     observed = {c['name']: c.get('conclusion') if c.get('status') == 'completed' else 'pending' for c in checks}
     observed.update(latest)
-    if not observed or any(s != 'success' for s in observed.values()):
+    if (not observed or any(s != 'success' for s in observed.values()) or
+            any(c.get('status') != 'completed' or c.get('conclusion') != 'success' for c in checks)):
         fail(repo.path, 'Checks pendientes, fallidos, omitidos o ausentes; no se fusiona.')
     missing = set(policy['checks']) - set(observed)
     if missing:
@@ -912,6 +1016,7 @@ def merge_tree(repo):
     clean(repo)
     for path, _, _, urls, child in repo.children:
         verify_reference(child, links(repo.path, committed=True)[path], urls)
+    test_before_push(repo)
     git(repo.path, 'push', '--recurse-submodules=check', '--', repo.push_remote,
         f'HEAD:refs/heads/{repo.branch}', stream=True)
     if heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') != head(repo.path):
@@ -959,6 +1064,7 @@ def sync(repo, recorded=None):
             fail(child.path, 'La referencia cambió después de publicar el hijo; se detiene su padre.')
         clean(child)
         verify_reference(child, oid, urls)
+    test_before_push(repo)
     print(f'=> [{label(repo.path)}] Publicando {repo.push_remote}/{repo.branch}...', flush=True)
     upstream = [] if value(repo.path, f'branch.{repo.branch}.remote') and value(repo.path, f'branch.{repo.branch}.merge') else ['--set-upstream']
     expected = head(repo.path)

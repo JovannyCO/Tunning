@@ -24,11 +24,16 @@ ambos propósitos, la atribución MIT y los dos roles al modificar la portada.
 ## Verificar los cambios
 
 ```bash
-python3 scripts/verify.py
-python3 -m unittest discover -s tests -v
-bash setup.sh --no-packages --target-dir /tmp/tunning-revision --dry-run
-bash setup.sh --no-packages --target-dir /tmp/tunning-revision
+python3 scripts/test-local.py --jobs 8
+tunning_revision=$(mktemp -d /tmp/tunning-revision.XXXXXX)
+bash setup.sh --no-packages --target-dir "$tunning_revision" --dry-run
+bash setup.sh --no-packages --target-dir "$tunning_revision"
 ```
+
+Ejecuta y corrige las comprobaciones en local antes de publicar. El runner
+comprueba sintaxis/enlaces y distribuye la suite entre procesos, con un máximo
+de ocho trabajos en este equipo. Los workflows de pruebas y criterios son
+manuales; los estados de GitHub se registran desde la terminal responsable.
 
 Usa destinos temporales únicos para pruebas; no ejecutes actualizadores o sync
 en proyectos del usuario como fixtures. No desactives firmas para eludir
@@ -40,6 +45,15 @@ activa, comprueba el árbol y los remotos antes de `git sync`, y asocia los PR
 a su issue cuando proceda. `main` es la principal pública de Tunning; otros
 proyectos pueden usar `production`. No impongas una rama a los submódulos ni
 fusiones PR automáticamente.
+
+`git sync`, `git syncPR` y `git syncPRmerge` comprueban el resultado local
+antes del push. Para otros proyectos configura sus suites mediante
+`tunning.testCommands`; no supongas que las pruebas de Tunning validan sus
+submódulos. Los modos PR registran el estado `terminal` tras publicar el SHA
+comprobado. La evidencia de criterios y la auditoría independiente siguen
+siendo necesarias: usa el SHA y la base reales, informes firmados y hashes de
+logs. No inventes informes ni marques requisitos pendientes solo porque pasaron
+las pruebas. Consulta [docs/GIT-PR.md](docs/GIT-PR.md).
 
 Comunica qué se verificó y qué queda pendiente. Una prueba local del perfil
 Cloud Shell no certifica su navegador, sus fuentes ni la persistencia real.

@@ -1,9 +1,14 @@
 name: Criterios
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, reopened, synchronize, edited, ready_for_review]
+  # Compatibilidad manual para evidencia legacy de Actions.
+  # La evidencia de auditoría local se valida desde la terminal responsable.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Número del PR con evidencia de Actions
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,7 +28,7 @@ jobs:
       - name: Comprobar casillas y evidencia del SHA y base vigentes
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ inputs.pr }}
           REPOSITORY: ${{ github.repository }}
           PYTHONDONTWRITEBYTECODE: '1'
         run: python3 scripts/check-issue-criteria.py --repository "$REPOSITORY" --pr "$PR_NUMBER"

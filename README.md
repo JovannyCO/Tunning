@@ -1,6 +1,6 @@
 # Tunning: terminal reproducible para Ubuntu, WSL2 y Cloud Shell
 
-[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) · [Pruebas automatizadas](https://github.com/JovannyCO/Tunning/actions/workflows/tests.yml)
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) · [Pruebas locales](docs/USO.md#comprobaciones-y-documentación)
 
 [![Tunning: tu entorno listo para trabajar. Explora el proyecto de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software.](assets/tunning-jovanny-medina-cifuentes-header.png)](#de-una-terminal-nueva-a-un-entorno-de-trabajo)
 
@@ -59,10 +59,11 @@ devup -l
 devup -y
 ```
 
-`git sync` confirma, integra y publica la rama de trabajo de cada repositorio. `devup -l` actualiza las CLI contempladas; `devup -y` incluye la actualización del sistema. Revisa la [guía de Git sync](docs/USO.md#git-sync) y la [guía de devup](docs/USO.md#devup) antes del primer uso.
+`git sync` confirma, integra, comprueba en local y publica la rama de trabajo de cada repositorio. `devup -l` actualiza las CLI contempladas; `devup -y` incluye la actualización del sistema. Revisa la [guía de Git sync](docs/USO.md#git-sync) y la [guía de devup](docs/USO.md#devup) antes del primer uso.
 
 Para revisar cambios individuales, `git syncPR "mensaje"` publica y prepara PR
-con sus issues; `git syncPRmerge` exige criterios, CI y auditoría independiente
+con sus issues tras las pruebas locales; `git syncPRmerge` exige criterios,
+pruebas y auditoría independiente
 vigentes antes de fusionar, de hijos a padres. Consulta la [política y guía de
 PR](docs/GIT-PR.md). Los tres alias comparten el motor recursivo y conservan
 la firma y rama de trabajo de cada repositorio.
@@ -101,18 +102,22 @@ Sí. Descubre los submódulos recursivamente, valida el árbol y publica primero
 
 ### ¿Git sync abre o fusiona pull requests?
 
-El comando publica las ramas de trabajo. La creación del issue, la revisión y la integración del pull request se realizan en GitHub como pasos separados.
+`git sync` publica las ramas de trabajo. `git syncPR` prepara issues y PR en borrador tras pasar las pruebas locales. `git syncPRmerge` permite una fusión solicitada explícitamente cuando se cumplen la política, los criterios y la auditoría independiente: [guía de PR](docs/GIT-PR.md).
 
 ### ¿Cómo puedo comprobar el proyecto antes de instalarlo?
 
 Puedes leer el [código del instalador](scripts/install.py), usar `--dry-run` o preparar una [instalación aislada](docs/USO.md#instalar-o-actualizar). Para ejecutar las pruebas:
 
 ```bash
-python3 scripts/verify.py
-python3 -m unittest discover -s tests -v
+python3 scripts/test-local.py --jobs 8
 ```
 
-Las pruebas usan repositorios, remotos y configuraciones temporales. No publican cambios en servidores ni actualizan tus herramientas reales.
+El runner comprueba sintaxis y enlaces, y ejecuta la suite en procesos paralelos.
+Las pruebas usan repositorios, remotos y configuraciones temporales. No publican
+cambios en servidores ni actualizan tus herramientas reales. Se ejecutan en
+local antes de subir cambios; los workflows de GitHub quedan disponibles solo
+para ejecución manual. Los modos PR envían los estados de esos resultados a
+GitHub para conservar las comprobaciones requeridas sin ejecutar Actions.
 
 ## Licencia y contribuciones
 

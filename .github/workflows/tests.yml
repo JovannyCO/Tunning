@@ -1,10 +1,7 @@
 name: Pruebas
 
 on:
-  push:
-    branches: [main, Ubuntu26]
-  pull_request:
-    branches: [main]
+  # Las pruebas habituales se ejecutan en local antes de publicar.
   workflow_dispatch:
 
 permissions:

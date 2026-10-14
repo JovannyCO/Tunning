@@ -129,7 +129,15 @@ elif parts[0] == 'pulls':
 elif parts[0] == 'commits' and parts[2] == 'check-runs':
     result = {'check_runs': repo.get('checks', [{'name': 'terminal', 'status': 'completed', 'conclusion': 'success'}])}
 elif parts[0] == 'commits' and parts[2] == 'statuses':
-    result = repo.get('statuses', [])
+    result = [status for status in repo.get('statuses', []) if status.get('sha', parts[1]) == parts[1]]
+elif parts[0] == 'statuses' and method == 'POST':
+    if (len(parts) != 2 or not re.fullmatch(r'[a-f0-9]{40}', parts[1]) or
+            data.get('state') not in ('pending', 'error', 'failure', 'success') or
+            not isinstance(data.get('context'), str) or not data['context'].strip()):
+        fail()
+    git('cat-file', '-e', parts[1] + '^{commit}')
+    result = dict(data, sha=parts[1])
+    repo.setdefault('statuses', []).insert(0, result)
 elif parts[:2] == ['actions', 'runs']:
     result = repo['runs'][parts[2]]
 else:

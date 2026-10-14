@@ -3,10 +3,31 @@
 [Guía de terminal](USO.md#git-sync)
 
 Los tres alias usan una sola copia de [scripts/git-sync.sh](../scripts/git-sync.sh).
-`git sync` conserva el flujo de equipo: confirma, integra y publica; no usa la
-API de GitHub ni modifica issues. `git syncPR` añade issues y PR en borrador,
+`git sync` conserva el flujo de equipo: confirma, integra, prueba en local y
+publica; no usa la API de GitHub ni modifica issues. `git syncPR` añade issues y PR en borrador,
 de hijos a padres, sin fusionarlos. `git syncPRmerge` prepara esos mismos PR y
-solo fusiona cuando pasan los criterios, CI y auditoría independiente.
+solo fusiona cuando pasan los criterios, las pruebas y la auditoría independiente.
+
+Las suites se ejecutan en la terminal antes del push. Si fallan, el comando
+conserva el trabajo y se detiene para corregirlo. Los modos PR registran en
+GitHub `terminal: success` para el SHA comprobado tras publicarlo. El estado
+`criterios` permanece pendiente hasta registrar evidencia y una auditoría
+independiente válidas. GitHub recibe resultados; no ejecuta la suite como parte
+de este flujo. Los workflows quedan disponibles únicamente mediante ejecución
+manual para compatibilidad con evidencia de Actions anterior.
+
+En Tunning, [scripts/test-local.py](../scripts/test-local.py) comprueba
+sintaxis/enlaces y reparte los tests entre procesos:
+
+```bash
+python3 scripts/test-local.py --jobs 8
+```
+
+Los alias detectan ese runner por repositorio. Para otras suites puedes fijar
+`tunning.testCommands` con un array JSON de comandos y argumentos, como explica
+la [guía de uso](USO.md#git-sync). La suite del padre no sustituye las pruebas
+de sus submódulos. Reinstala el motor tras modificarlo con
+`bash setup.sh --no-packages`.
 
 Los modos PR necesitan GitHub CLI (`gh`) autenticado con permisos de contenido,
 issues y PR. No instalan credenciales. La base predeterminada es la rama real
@@ -34,29 +55,45 @@ sin retirar otros responsables y se comprueba que GitHub permita asignarlo.
 ## Criterios con evidencia
 
 Un issue necesita `## Criterios de aceptación` y casillas `- [ ]`/`- [x]`.
-El check **Criterios / criterios** rechaza casillas pendientes y exige un bloque
-JSON `tunning-evidence`: SHA del PR, SHA base, resumen de los criterios y
-explicación por criterio vinculada a CI aprobado de `tests.yml` para ese SHA.
+La comprobación local rechaza casillas pendientes y exige un bloque JSON
+`tunning-evidence`: SHA del PR, SHA base, resumen de los criterios y explicación
+por criterio vinculada a una auditoría local firmada y sus resultados.
 Editar el código, la base o los criterios invalida la evidencia anterior.
 
 Un responsable comprueba el contenido de cada criterio y prepara fuera del
 checkout un array JSON: `[{"id":"A1","detail":"Comando, resultado y caso comprobado"}, ...]`.
 Los IDs siguen el orden de las casillas de aceptación; deben cubrirlas todas.
-Después de terminar CI puede registrar esa evidencia y marcar las casillas:
+Después de pasar las pruebas y obtener el informe independiente firmado del SHA
+y base publicados, puede registrar esa evidencia y marcar las casillas:
 
 ```bash
 python3 scripts/check-issue-criteria.py --repository JovannyCO/Tunning --pr 12 \
-  --record /tmp/criterios-verificados.json --run 123456
+  --record /tmp/criterios-verificados.json --local-audit
 python3 scripts/check-issue-criteria.py --repository JovannyCO/Tunning --pr 12
 ```
 
 El registro no evalúa semánticamente las explicaciones: representa la revisión
-explícita del responsable y comprueba su cobertura/CI. No crea pruebas ni
-auditorías inexistentes. Tras actualizar el issue, vuelve a ejecutar el check
-de Criterios desde Actions; el evento de edición de un issue no reejecuta un
-check del PR. Para impedir también fusiones manuales configura este check y
-`terminal` como requeridos en las reglas de la rama. El check por sí solo no
-es una regla de protección.
+explícita del responsable y comprueba la cobertura y el informe configurado en
+`tunning.auditReport` con la política `tunning.prPolicy`. No crea pruebas ni
+auditorías inexistentes. El informe incluye comandos, resultados y hashes de
+logs; la evidencia vincula esos datos al SHA y base vigentes. No reutilices un
+informe de otro commit ni inventes identidad, firma o resultados.
+
+El registro local publica `criterios: success` para ese SHA. Una nueva
+publicación o una base distinta exige repetir la validación; al revalidar, el
+motor deja `criterios` pendiente mientras la evidencia no corresponda al estado
+actual.
+Para comprobar también fusiones manuales, las reglas de la rama requieren los
+estados `terminal` y `criterios`. En la migración desde Actions, su responsable
+debe permitir que la terminal autenticada publique esos estados, conservando
+los requisitos de actualización de la base, aplicación a administradores y
+prohibición de force push. El motor no modifica ni omite reglas remotas.
+
+`--record ... --run ID` conserva la compatibilidad con evidencia de una ejecución
+manual exitosa de `tests.yml` del SHA correspondiente. Esa opción no forma parte
+del ciclo local habitual y no reemplaza la auditoría independiente para fusionar.
+El workflow manual de Criterios acepta un número de PR con esa evidencia anterior;
+los informes y claves externos de la terminal no se copian al runner de GitHub.
 
 ## Política de auditoría
 
@@ -67,9 +104,8 @@ antes de auditar; el código de un PR no debe poder modificar esta política.
 
 ```json
 {
-  "commands": [["python3", "scripts/verify.py"], ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"]],
+  "commands": [["python3", "scripts/test-local.py", "--jobs", "8"]],
   "checks": ["terminal", "criterios"],
-  "workflow": ".github/workflows/tests.yml",
   "merge_method": "merge",
   "reviewers": [],
   "auditors": {
@@ -77,6 +113,11 @@ antes de auditar; el código de un PR no debe poder modificar esta política.
   }
 }
 ```
+
+El ejemplo mantiene los dos estados requeridos, publicados desde local. Una
+política aprobada puede acordar otros comandos y revisores; no se cambia en
+silencio para hacer pasar un PR. El fingerprint y las identidades del ejemplo
+son marcadores: reemplázalos por datos comprobados antes de usar la política.
 
 Registra el proveedor y sesión del implementador con
 `tunning.implementerProvider` y `tunning.implementerSession`. El auditor usa
@@ -114,7 +155,8 @@ la herramienta no certifica que se trate de otra máquina física.
 
 ## Fusión y reanudación
 
-`git syncPRmerge` verifica CI, checks, revisiones acordadas, estado del PR,
+`git syncPRmerge` verifica pruebas y evidencia local, estados/checks requeridos,
+revisiones acordadas, estado del PR,
 método permitido y SHA remoto/base inmediatamente antes de la llamada a GitHub.
 Usa la condición `sha` del endpoint normal de merge; no emplea force ni
 admin override. GitHub aplica las protecciones y reglas adicionales del repo.
