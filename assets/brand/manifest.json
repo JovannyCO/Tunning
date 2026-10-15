@@ -139,8 +139,14 @@
           "destination": "#de-una-terminal-nueva-a-un-entorno-de-trabajo",
           "alt": "Terminal Tuning: prepara tu terminal y conoce el trabajo de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software",
           "generation_artifact": "exec-9e73a7b1-6307-4ed3-b968-5eb8b9e4a7f7.png",
-          "sha256": "5352b9561e2fa4ec086a5c91ca028c96f0091daee1021245ba07b8f6073d43d2",
-          "normalization_and_badge_command": "magick banner-generado.png -resize '1942x809^' -gravity center -extent 1942x809 '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite -strip banner-final.png"
+          "sha256": "a8adefad78ba7d240962b27aeb8884c54c887c837a105e2407c9f9a2a87ab2f3",
+          "normalization_and_badge_command": "magick banner-generado.png -resize '1942x809^' -gravity center -extent 1942x809 base.png\nbash .brand/scripts/feather-png.sh base.png suavizado.png\nmagick suavizado.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite -strip banner-final.png",
+          "finishing": {
+            "source_commit": "61bd470af2977dc7ec3bc73da4924959579e3ff0",
+            "script": ".brand/scripts/feather-png.sh",
+            "alpha_feather_px": 32,
+            "method": "ImageMagick; original generated composition preserved"
+          }
         },
         {
           "kind": "footer",
@@ -561,26 +567,5 @@
       ]
     }
   ],
-  "archive": [
-    {
-      "previous_path": "assets/tunning-jovanny-medina-cifuentes-header.png",
-      "archive_path": "assets/_borrar/tunning-jovanny-medina-cifuentes-header.png",
-      "sha256": "2d06a94cf623be40c25d7c5177c60ce307e91884c85410a3ca88670c01e42960"
-    },
-    {
-      "previous_path": "assets/tunning-jovanny-medina-cifuentes-footer.png",
-      "archive_path": "assets/_borrar/tunning-jovanny-medina-cifuentes-footer.png",
-      "sha256": "111a4b67aa3601fd182882b113d15b7a92890cb684d2d2a6fb42255e5917541b"
-    },
-    {
-      "previous_path": "assets/brand/terminal-tuning-jovanny-co-header.png",
-      "archive_path": "assets/_borrar/brand/terminal-tuning-jovanny-co-header.png",
-      "sha256": "4c04a0495f1d8e8d4c29a459fda669e046d2764ab1a8f577e861071066c9bbfa"
-    },
-    {
-      "previous_path": "assets/brand/terminal-tuning-jovanny-co-footer.png",
-      "archive_path": "assets/_borrar/brand/terminal-tuning-jovanny-co-footer.png",
-      "sha256": "68dd8ef8e67da0f690810161da633fa9f875ec4287efaec36d64aadc8216a874"
-    }
-  ]
+  "archive": []
 }
