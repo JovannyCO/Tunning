@@ -12,7 +12,7 @@ de hijos a padres, sin fusionarlos. `git syncPRmerge` prepara esos mismos PR y
 solo fusiona cuando pasan los criterios, las comprobaciones y la auditoría independiente.
 
 Las comprobaciones se ejecutan en la terminal antes del push. Si fallan, el comando
-conserva el trabajo y se detiene para corregirlo. Tunning mantiene sus
+conserva el trabajo y se detiene para corregirlo. Terminal Tuning mantiene sus
 comprobaciones en local, sin configuración `.github` ni estados de pruebas o
 criterios enviados a GitHub. La evidencia de aceptación y la auditoría
 independiente se validan también en la terminal antes de una fusión solicitada.
@@ -38,7 +38,7 @@ la terminal ejecuta la misma versión que se revisa en el checkout. Los nombres
 propios de variables y funciones usan español de Colombia; los identificadores
 de Git, GitHub y sus formatos conservan su contrato de compatibilidad.
 
-En Tunning, [scripts/verify.sh](../scripts/verify.sh) comprueba
+En Terminal Tuning, [scripts/verify.sh](../scripts/verify.sh) comprueba
 sintaxis Bash/JSON, enlaces locales y cabeceras y dimensiones PNG:
 
 ```bash
@@ -90,9 +90,9 @@ Después de pasar las pruebas y obtener el informe independiente firmado del SHA
 y base publicados, puede registrar esa evidencia y marcar las casillas:
 
 ```bash
-bash scripts/check-issue-criteria.sh --repository JovannyCO/Tunning --pr 12 \
+bash scripts/check-issue-criteria.sh --repository JovannyCO/terminal-tuning --pr 12 \
   --record /tmp/criterios-verificados.json --local-audit
-bash scripts/check-issue-criteria.sh --repository JovannyCO/Tunning --pr 12
+bash scripts/check-issue-criteria.sh --repository JovannyCO/terminal-tuning --pr 12
 ```
 
 El registro no evalúa semánticamente las explicaciones: representa la revisión
@@ -107,14 +107,14 @@ validación local del informe firmado. Una nueva publicación o una base distint
 exige repetir la validación. El motor bloquea la fusión si la evidencia no
 corresponde al estado actual, aunque las pruebas hayan pasado.
 
-Para Tunning, configura `checks: []` en la política porque sus comprobaciones se
+Para Terminal Tuning, configura `checks: []` en la política porque sus comprobaciones se
 ejecutan en local. Sus reglas de rama conservan las demás restricciones acordadas, como
 la aplicación a administradores y la prohibición de force push. El motor no
 modifica ni omite reglas remotas: una regla de otro repositorio que exija un
 check sigue siendo obligatoria hasta que su responsable la cambie.
 
 `--record ... --run ID` conserva compatibilidad histórica para repositorios que
-usen CI. Esa opción no forma parte del flujo de Tunning ni reemplaza la
+usen CI. Esa opción no forma parte del flujo de Terminal Tuning ni reemplaza la
 auditoría independiente para fusionar.
 
 ## Política de auditoría

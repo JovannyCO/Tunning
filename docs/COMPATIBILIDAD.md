@@ -2,7 +2,7 @@
 
 [Volver a la portada](../README.md) · [Guía de uso](USO.md)
 
-Tunning automatiza la configuración de Bash y sus comandos de usuario. La
+Terminal Tuning automatiza la configuración de Bash y sus comandos de usuario. La
 apariencia de cada emulador y editor también depende de su interfaz.
 
 | Entorno | Se automatiza | Paso del usuario | Estado de validación |
@@ -50,9 +50,9 @@ una lista breve de revisión visual. Registra las limitaciones observadas.
 
 ## Identidad y publicación
 
-Clonar Tunning por HTTPS no requiere SSH. Instalarlo no configura credenciales
+Clonar Terminal Tuning por HTTPS no requiere SSH. Instalarlo no configura credenciales
 ni firma de otros repositorios. El alias conserva la rama de trabajo de cada
-repositorio: `main` para la principal pública de Tunning y `production` cuando
+repositorio: `main` para la principal pública de Terminal Tuning y `production` cuando
 sea la principal privada configurada por su propietario. `git syncPR` prepara
 PR y `git syncPRmerge` exige pruebas locales, criterios y auditoría independiente
 para fusionarlos. Consulta [Git sync](USO.md#git-sync).
