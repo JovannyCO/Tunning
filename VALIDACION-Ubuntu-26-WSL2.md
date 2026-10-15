@@ -6,7 +6,7 @@ Fecha: 2026-10-04.
 
 Se incorporaron el prompt Bash activo, sus ajustes de teclado, `devup`, una implementación compartida de `git sync` y el perfil visual de Windows Terminal. El instalador común copia los comandos sin enlaces al checkout, respalda los archivos existentes, comprueba los marcadores y conserva la zona horaria de Ubuntu/WSL. Las variantes Starship y Cloud Shell siguen disponibles.
 
-La suite `python3 -m unittest discover -s tests -v` pasó 24 pruebas: Git real con remotos locales (incluidos fallos de firma/commit y conflictos), instalación y reinstalación, preservación de configuraciones, `devup` con actualizadores simulados y prompt. El diagnóstico siguiente documenta el estado **anterior** a esas correcciones. Sigue pendiente certificar una instalación completa en una distribución WSL recién creada; identidad, credenciales y claves se restauran por separado.
+Las comprobaciones de la reconciliación cubrieron Git con remotos locales, fallos de firma y conflictos, instalación y reinstalación, conservación de preferencias, `devup` con actualizadores simulados y el prompt. El diagnóstico siguiente documenta el estado **anterior** a esas correcciones. Sigue pendiente certificar una instalación completa en una distribución WSL recién creada; identidad, credenciales y claves se restauran por separado.
 
 ## Diagnóstico inicial
 
@@ -23,7 +23,7 @@ Repositorio auditado: `~/projects/open/Tunning`, rama `Ubuntu26`, commit `3c9ae4
 | WSL | `wsl.exe --list --verbose`: `Ubuntu-26.04`, versión 2 |
 | Kernel | `6.18.33.2-microsoft-standard-WSL2`, x86_64 |
 | Shell | Bash, `/bin/bash` |
-| Prompt configurado | Funciones `__git_ps1_md3` y `__build_ps1` en `~/.bashrc`; `PROMPT_COMMAND='__build_ps1'` |
+| Prompt configurado | Funciones de apariencia en `~/.bashrc`, ejecutadas mediante `PROMPT_COMMAND` |
 | Starship / fastfetch / eza | No instalados en el entorno inspeccionado |
 | Zona horaria | `America/New_York`, mediante `/etc/localtime`; `TZ` no definido en la sesión de inspección |
 | Windows Terminal | Esquema Material MD3; fuente JetBrainsMono Nerd Font Mono, tamaño 13, peso normal; opacidad 92, acrílico activo, padding `14, 10, 14, 10`, antialiasing `cleartype` |
@@ -111,8 +111,6 @@ La guía contiene instalación manual de NVM/Node y Firebase, pero las referenci
 - Tres escenarios del instalador en destinos temporales: reinstalación, invocación desde otro directorio y marcador incompleto. Se redirigieron únicamente las referencias de destino `$HOME` en una copia temporal; `sudo` se sustituyó por un registrador y se simuló la fuente ya instalada. No se ejecutaron descargas ni cambios de sistema.
 - Cuatro simulaciones de fallos de Git y una reproducción con Git real usando exclusivamente repositorios temporales y un remoto local.
 - Comparación de hashes antes/después: `~/.bashrc`, `~/.gitconfig` y `settings.json` de Windows Terminal permanecieron idénticos.
-
-El runner y sus resultados quedaron temporalmente en `/tmp/tunning-audit-20261004.py` y `/tmp/tunning-audit-20261004-bxwqq57a/results.json`. No son archivos permanentes del repo.
 
 No se ejecutó el instalador sobre el entorno real ni una instalación completa en una distribución limpia. Esta auditoría demuestra faltantes y errores concretos; no certifica todavía una reconstrucción completa.
 

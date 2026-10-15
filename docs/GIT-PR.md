@@ -2,13 +2,16 @@
 
 [Guía de terminal](USO.md#git-sync)
 
-Los tres alias usan una sola copia de [scripts/git-sync.sh](../scripts/git-sync.sh).
-`git sync` conserva el flujo de equipo: confirma, integra, prueba en local y
+Los tres alias comparten [scripts/git-sync.sh](../scripts/git-sync.sh), escrito
+en Bash y apoyado en Git y las herramientas básicas de Ubuntu. Sus módulos
+[scripts/git-pr.sh](../scripts/git-pr.sh) y [scripts/git-json.sh](../scripts/git-json.sh)
+se instalan junto al motor; el segundo procesa JSON en Bash.
+`git sync` conserva el flujo de equipo: confirma, integra, comprueba en local y
 publica; no usa la API de GitHub ni modifica issues. `git syncPR` añade issues y PR en borrador,
 de hijos a padres, sin fusionarlos. `git syncPRmerge` prepara esos mismos PR y
-solo fusiona cuando pasan los criterios, las pruebas y la auditoría independiente.
+solo fusiona cuando pasan los criterios, las comprobaciones y la auditoría independiente.
 
-Las suites se ejecutan en la terminal antes del push. Si fallan, el comando
+Las comprobaciones se ejecutan en la terminal antes del push. Si fallan, el comando
 conserva el trabajo y se detiene para corregirlo. Tunning mantiene sus
 comprobaciones en local, sin configuración `.github` ni estados de pruebas o
 criterios enviados a GitHub. La evidencia de aceptación y la auditoría
@@ -16,17 +19,37 @@ independiente se validan también en la terminal antes de una fusión solicitada
 Los modos PR siguen usando GitHub para gestionar issues, PR, revisiones y las
 demás reglas del repositorio.
 
-En Tunning, [scripts/test-local.py](../scripts/test-local.py) comprueba
-sintaxis/enlaces y reparte los tests entre procesos:
+## Decisiones de implementación
+
+La lógica usa Bash 4.4, Git y las herramientas básicas de Ubuntu para que la
+instalación y los tres alias se puedan revisar y ejecutar con las herramientas
+de la terminal. El motor común conserva el mismo comportamiento de firmas,
+ramas, remotos y submódulos en cada modo.
+
+El módulo JSON trata las respuestas de GitHub, la configuración y los informes
+como datos, conserva los argumentos literales y calcula huellas sobre una
+representación uniforme de Unicode. La política y el informe se copian a
+temporales privados: la lectura, la verificación GPG y el cálculo de huellas
+utilizan los mismos bytes para evitar cambios entre esas operaciones.
+
+El [instalador Bash](../scripts/install.sh) actualiza juntos el motor y sus
+módulos, con respaldos, escritura atómica y restauración ante errores. Así,
+la terminal ejecuta la misma versión que se revisa en el checkout. Los nombres
+propios de variables y funciones usan español de Colombia; los identificadores
+de Git, GitHub y sus formatos conservan su contrato de compatibilidad.
+
+En Tunning, [scripts/verify.sh](../scripts/verify.sh) comprueba
+sintaxis Bash/JSON, enlaces locales y cabeceras y dimensiones PNG:
 
 ```bash
-python3 scripts/test-local.py --jobs 8
+bash scripts/verify.sh
 ```
 
-Los alias detectan ese runner por repositorio. Para otras suites puedes fijar
-`tunning.testCommands` con un array JSON de comandos y argumentos, como explica
-la [guía de uso](USO.md#git-sync). La suite del padre no sustituye las pruebas
-de sus submódulos. Reinstala el motor tras modificarlo con
+Los alias detectan ese verificador por repositorio. Puedes fijar
+`tunning.testCommands` con un array JSON de comandos y argumentos para elegir
+otras comprobaciones; esta preferencia tiene prioridad, como explica
+la [guía de uso](USO.md#git-sync). Cada submódulo usa sus propias comprobaciones.
+Un fallo bloquea el push. Reinstala el motor tras modificarlo con
 `bash setup.sh --no-packages`.
 
 Los modos PR necesitan GitHub CLI (`gh`) autenticado con permisos de contenido,
@@ -67,9 +90,9 @@ Después de pasar las pruebas y obtener el informe independiente firmado del SHA
 y base publicados, puede registrar esa evidencia y marcar las casillas:
 
 ```bash
-python3 scripts/check-issue-criteria.py --repository JovannyCO/Tunning --pr 12 \
+bash scripts/check-issue-criteria.sh --repository JovannyCO/Tunning --pr 12 \
   --record /tmp/criterios-verificados.json --local-audit
-python3 scripts/check-issue-criteria.py --repository JovannyCO/Tunning --pr 12
+bash scripts/check-issue-criteria.sh --repository JovannyCO/Tunning --pr 12
 ```
 
 El registro no evalúa semánticamente las explicaciones: representa la revisión
@@ -84,7 +107,7 @@ validación local del informe firmado. Una nueva publicación o una base distint
 exige repetir la validación. El motor bloquea la fusión si la evidencia no
 corresponde al estado actual, aunque las pruebas hayan pasado.
 
-Para Tunning, configura `checks: []` en la política porque todas sus suites se
+Para Tunning, configura `checks: []` en la política porque sus comprobaciones se
 ejecutan en local. Sus reglas de rama conservan las demás restricciones acordadas, como
 la aplicación a administradores y la prohibición de force push. El motor no
 modifica ni omite reglas remotas: una regla de otro repositorio que exija un
@@ -96,14 +119,15 @@ auditoría independiente para fusionar.
 
 ## Política de auditoría
 
-Guarda la política y los informes fuera del checkout y del directorio Git.
+Las auditorías firman y verifican sus informes con GPG. Guarda la política y
+los informes fuera del checkout y del directorio Git.
 Configura `tunning.prPolicy` con la ruta de un JSON que pertenezca al usuario
-y no admita escritura de grupo/otros. Acuerda las suites y las identidades
+y no admita escritura de grupo/otros. Acuerda las comprobaciones y las identidades
 antes de auditar; el código de un PR no debe poder modificar esta política.
 
 ```json
 {
-  "commands": [["python3", "scripts/test-local.py", "--jobs", "8"]],
+  "commands": [["bash", "scripts/verify.sh"]],
   "checks": [],
   "merge_method": "merge",
   "reviewers": [],
@@ -113,7 +137,7 @@ antes de auditar; el código de un PR no debe poder modificar esta política.
 }
 ```
 
-El ejemplo acuerda suites locales sin checks de GitHub requeridos. Para otros
+El ejemplo acuerda comprobaciones locales sin checks de GitHub requeridos. Para otros
 repositorios, una política aprobada puede acordar checks remotos, comandos y
 revisores; no se cambia en silencio para hacer pasar un PR. El fingerprint y
 las identidades del ejemplo son marcadores: reemplázalos por datos comprobados
@@ -134,7 +158,7 @@ Una aprobación escrita en texto libre o los tests del implementador no lo
 sustituyen. No publiques logs con credenciales o datos privados.
 
 En la terminal del auditor, después de revisar el código, genera el informe
-con el mismo motor instalado. Este modo ejecuta solo las suites acordadas,
+con el mismo motor instalado. Este modo ejecuta solo las comprobaciones acordadas,
 comprueba HEAD, bytes del índice y archivos propios/hijos antes y después,
 y conserva incluso los informes fallidos; no confirma, publica ni corrige.
 
@@ -148,7 +172,7 @@ git config tunning.auditReport /tmp/auditoria-sha.json
 Si hay defectos, usa `--findings /tmp/hallazgos.json` (array JSON) en lugar de
 `--approve` y entrega el resultado al implementador. Usa otra ruta para cada
 informe; no sobrescribe informes ni firmas. El comando detecta cambios de
-código pero no aísla procesos: las suites acordadas también deben ser de
+código pero no aísla procesos: las comprobaciones acordadas también deben ser de
 lectura sobre el checkout. Conserva los cambios inesperados para su revisión.
 El responsable autoriza la clave y el auditor declara el entorno/sesión;
 la herramienta no certifica que se trate de otra máquina física.

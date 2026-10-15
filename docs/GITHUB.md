@@ -21,11 +21,11 @@ La descripción y los topics se guardan en GitHub, fuera de los archivos version
 
 **Descripción:** Tunning: terminal reproducible para Ubuntu, WSL2 y Google Cloud Shell, con Material MD3, git sync recursivo y devup. Caso de trabajo de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software.
 
-**Topics:** `ubuntu`, `wsl2`, `google-cloud-shell`, `bash`, `python`, `terminal`, `developer-experience`, `dotfiles`, `material-design-3`, `git`, `git-submodules`, `automation`.
+**Topics:** `ubuntu`, `wsl2`, `google-cloud-shell`, `bash`, `terminal`, `developer-experience`, `dotfiles`, `material-design-3`, `git`, `git-submodules`, `automation`.
 
 Si cambia el alcance del proyecto, actualiza tanto estos metadatos como el README. Mantén el nombre profesional, los dos roles y los datos de contacto consistentes; evita repetir palabras clave sin aportar información.
 
-La [licencia MIT](../LICENSE), la [guía de contribución](../CONTRIBUTING.md), la [política de seguridad](../SECURITY.md) y el [runner de pruebas locales](../scripts/test-local.py) aportan condiciones de reutilización y comprobaciones reproducibles. Las pruebas se ejecutan en la terminal antes de publicar; la [guía de PR](GIT-PR.md) explica su evidencia y la auditoría independiente.
+La [licencia MIT](../LICENSE), la [guía de contribución](../CONTRIBUTING.md), la [política de seguridad](../SECURITY.md) y el [verificador local](../scripts/verify.sh) aportan condiciones de reutilización y comprobaciones reproducibles. La [guía de uso](USO.md#comprobaciones-y-documentación) explica las comprobaciones locales; la [guía de PR](GIT-PR.md) detalla la evidencia y la auditoría independiente necesarias para publicar y fusionar.
 
 ## Alcance de la optimización
 

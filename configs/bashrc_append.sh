@@ -4,9 +4,9 @@
 # Si esto se exporta después (como antes, junto a "Starship prompt"),
 # `command -v eza` falla en una shell nueva y el alias cae al `ls` plano.
 [[ $- == *i* ]] || return 0
-TUNNING_CONFIG_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f $TUNNING_CONFIG_DIR/settings.sh ]]; then
-    . "$TUNNING_CONFIG_DIR/settings.sh"
+DIRECTORIO_CONFIG_TUNNING="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f $DIRECTORIO_CONFIG_TUNNING/settings.sh ]]; then
+    . "$DIRECTORIO_CONFIG_TUNNING/settings.sh"
 fi
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 
@@ -63,18 +63,18 @@ alias -- -='cd -'
 # rectángulos. Se detecta el entorno (var oficial de Cloud Shell) y se
 # desactivan los íconos solo ahí; WSL2 conserva los íconos normales.
 if [[ ${TUNNING_PROFILE:-} == cloudshell || -n ${CLOUD_SHELL:-} ]]; then
-    EZA_ICONS='never'
+    ICONOS_EZA='never'
 else
-    EZA_ICONS='always'
+    ICONOS_EZA='always'
 fi
 
 if [[ ${TUNNING_EXTRAS:-false} == true ]] && command -v eza &>/dev/null; then
-    alias ls="eza --icons=$EZA_ICONS --group-directories-first --color=always"
-    alias ll="eza -la --icons=$EZA_ICONS --group-directories-first --color=always --git --header"
-    alias la="eza -a --icons=$EZA_ICONS --group-directories-first --color=always"
-    alias lt="eza -T --icons=$EZA_ICONS --color=always --level=3"
-    alias l="eza -1 --icons=$EZA_ICONS --color=always"
-    alias lg="eza -la --icons=$EZA_ICONS --git --git-ignore --color=always"
+    alias ls="eza --icons=$ICONOS_EZA --group-directories-first --color=always"
+    alias ll="eza -la --icons=$ICONOS_EZA --group-directories-first --color=always --git --header"
+    alias la="eza -a --icons=$ICONOS_EZA --group-directories-first --color=always"
+    alias lt="eza -T --icons=$ICONOS_EZA --color=always --level=3"
+    alias l="eza -1 --icons=$ICONOS_EZA --color=always"
+    alias lg="eza -la --icons=$ICONOS_EZA --git --git-ignore --color=always"
 else
     alias ls='ls --color=auto'
     alias ll='ls -alF --color=auto'
@@ -108,8 +108,8 @@ alias v='vim'
 alias c='code .'
 
 # ── Funciones útiles ─────────────────────────────────────────────────────
-mkcd() { mkdir -p "$1" && cd "$1"; }
-extract() {
+crear_y_entrar() { mkdir -p "$1" && cd "$1"; }
+extraer() {
     case "$1" in
         *.tar.bz2) tar xjf "$1" ;;
         *.tar.gz)  tar xzf "$1" ;;
@@ -152,8 +152,8 @@ if [[ ${TUNNING_DEVUP_BOOT:-1} != 0 ]] && command -v devup &>/dev/null; then
 fi
 
 # ── Bienvenida (fastfetch al abrir terminal) ─────────────────────────────
-if [[ ${TUNNING_EXTRAS:-false} == true ]] && command -v fastfetch &>/dev/null && [[ -z ${FASTFETCH_SHOWN:-} ]]; then
-    export FASTFETCH_SHOWN=1
+if [[ ${TUNNING_EXTRAS:-false} == true ]] && command -v fastfetch &>/dev/null && [[ -z ${FASTFETCH_MOSTRADO:-} ]]; then
+    export FASTFETCH_MOSTRADO=1
     fastfetch
 fi
 
@@ -161,5 +161,5 @@ fi
 if [[ ${TUNNING_PROMPT:-bash} == starship ]] && command -v starship &>/dev/null; then
     eval "$(starship init bash)"
 else
-    . "$TUNNING_CONFIG_DIR/prompt-bash.sh"
+    . "$DIRECTORIO_CONFIG_TUNNING/prompt-bash.sh"
 fi

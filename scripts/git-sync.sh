@@ -1,1104 +1,546 @@
 #!/usr/bin/env bash
-# Archivo autónomo: el instalador copia esta única implementación del comando.
-set -euo pipefail
-exec python3 - "$@" <<'PY'
-import datetime
-import argparse
-import hashlib
-import json
-import os
-from pathlib import Path
-import posixpath
-import pwd
-import re
-import socket
-import subprocess
-import sys
-import tempfile
-import time
-from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+# Implementación Bash de los alias Git; el instalador conserva este archivo y su módulo PR.
+set -Eeuo pipefail
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+    printf '%s\n' 'git sync necesita Bash 4.4 o posterior.' >&2
+    exit 1
+fi
+shopt -s inherit_errexit
 
-
-HELP = '''Uso: git sync ["mensaje"]
+AYUDA='Uso: git sync ["mensaje"]
      git syncPR ["mensaje"] [--issue N]
      git syncPRmerge ["mensaje"] [--issue N]
-Los tres alias usan esta implementación. sync publica; syncPR prepara PR;
+Los alias usan Bash y Git. sync publica; syncPR prepara PR;
 syncPRmerge exige evidencia vigente y auditoría independiente para fusionar.
-Valida e inicializa los submódulos recursivos en sus commits registrados.
+Valida e inicializa submódulos recursivos en sus commits registrados.
 De hijos a padres: agrega cambios, crea commits, integra mediante merge la rama
 remota y production (si existe), y publica únicamente cada rama de trabajo.
-Un HEAD separado necesita submodule.<nombre>.branch en el padre; branch=.
-usa la rama del padre. No se elige una rama por defecto para HEAD separado.
-Configuración por repositorio: tunning.syncSign (true), tunning.syncProduction
-(true). Con syncSign=false se respeta commit.gpgsign. Se respetan los remotos
-branch.<rama>.remote/pushRemote y remote.pushDefault; por defecto, origin.
-Un fallo detiene sus padres. Antes del push se comprueba la disponibilidad
-remota de las referencias hijas, también con --recurse-submodules=check.
-Los modos PR necesitan gh autenticado en github.com y una rama distinta de
-la base (tunning.prBase o rama predeterminada real). No crean ramas arbitrarias.
-Política/auditorías: tunning.prPolicy y tunning.auditReport, fuera del checkout.
-Pruebas antes de publicar: tunning.testCommands (JSON de arrays de argumentos)
-o scripts/test-local.py cuando existe; un fallo bloquea el push y sus padres.
-Ver docs/GIT-PR.md para evidencia, firmas, pruebas y reanudación.
-'''
-MODE = 'sync'
-if sys.argv[1:2] and sys.argv[1].startswith('--tunning-mode='):
-    MODE = sys.argv.pop(1).split('=', 1)[1]
-if sys.argv[1:2] in (['--help'], ['-h']):
-    print(HELP, end='')
-    sys.exit(0)
-
-OPTIONS = None
-if MODE != 'sync':
-    parser = argparse.ArgumentParser(description=HELP)
-    parser.add_argument('message', nargs='*')
-    parser.add_argument('--issue', type=int)
-    parser.add_argument('--repository')
-    parser.add_argument('--pr', type=int)
-    parser.add_argument('--record', type=Path)
-    parser.add_argument('--run', type=int)
-    parser.add_argument('--local-audit', action='store_true')
-    parser.add_argument('--output', type=Path)
-    parser.add_argument('--provider')
-    parser.add_argument('--session')
-    parser.add_argument('--environment')
-    parser.add_argument('--signing-key')
-    parser.add_argument('--findings', type=Path)
-    parser.add_argument('--approve', action='store_true')
-    OPTIONS = parser.parse_args()
-MESSAGE = ' '.join(OPTIONS.message if OPTIONS else sys.argv[1:]) or 'Cambios en la matrix'
-ROOT = None
-REPOS = {}
-PUBLISHED = {}
-PRS = {}
-MERGED = {}
-
-
-class SyncError(Exception):
-    pass
-
-
-def label(path):
-    return str(path.relative_to(ROOT)) if ROOT and path.is_relative_to(ROOT) else str(path)
-
-
-def fail(path, reason):
-    raise SyncError(f'[{label(path)}] {reason}')
-
-
-def git(path, *args, stream=False, codes=(0,)):
-    # Las rutas son argumentos literales, nunca código shell ni pathspecs mágicos.
-    env = {**os.environ, 'GIT_LITERAL_PATHSPECS': '1'}
-    result = subprocess.run(
-        ['git', '-c', 'submodule.recurse=false', '-c', 'fetch.recurseSubmodules=false', *args],
-        cwd=path, env=env, capture_output=not stream, text=True, errors='surrogateescape')
-    if result.returncode not in codes:
-        detail = (result.stderr or '').strip() if not stream else ''
-        command = args[0]
-        if command == '-c':
-            command = args[next(i for i in range(0, len(args), 2) if args[i] != '-c')]
-        fail(path, f'{command} falló (código {result.returncode}).' + (f'\n{detail}' if detail else ''))
-    return result
-
-
-def value(path, key, file=None):
-    args = ['config'] + (['--file', str(file)] if file else [])
-    result = git(path, *args, '--null', '--get-all', key, codes=(0, 1))
-    values = result.stdout.rstrip('\0').split('\0') if result.returncode == 0 else []
-    if file and len(set(values)) > 1:
-        fail(path, f'Configuración ambigua: {key} en {file}.')
-    # Git da prioridad al último valor, incluyendo las preferencias locales.
-    return values[-1] if values else None
-
-
-def boolean(path, key):
-    result = git(path, 'config', '--type=bool', '--get', key, codes=(0, 1))
-    return result.returncode == 1 or result.stdout.strip() == 'true'
-
-
-def head(path):
-    return git(path, 'rev-parse', '--verify', 'HEAD').stdout.strip()
-
-
-def ancestor(path, older, newer):
-    return git(path, 'merge-base', '--is-ancestor', older, newer, codes=(0, 1)).returncode == 0
-
-
-def heads(path, remote, *patterns, tags=False):
-    args = ['ls-remote', '--heads'] + (['--tags'] if tags else [])
-    result = git(path, *args, '--', remote, *patterns)
-    return {ref: oid for oid, ref in (row.split('\t', 1) for row in result.stdout.splitlines())}
-
-
-def links(path, committed=False):
-    result = git(path, *(['ls-tree', '-rz', 'HEAD'] if committed else ['ls-files', '--stage', '-z']))
-    found = {}
-    for entry in result.stdout.split('\0'):
-        if not entry:
-            continue
-        metadata, name = entry.split('\t', 1)
-        mode, kind, oid = metadata.split(' ', 2)
-        if committed:
-            if mode == '160000':
-                found[name] = oid
-        elif oid != '0':
-            fail(path, f'Hay conflictos sin resolver en {name!r}.')
-        elif mode == '160000':
-            found[name] = kind
-    return found
-
-
-def module_contents(path):
-    modules = path / '.gitmodules'
-    if modules.is_symlink():
-        fail(path, '.gitmodules no puede ser un enlace simbólico.')
-    return modules.read_bytes() if modules.exists() else b''
-
-
-def fingerprint(path):
-    return links(path), module_contents(path)
-
-
-def configured_branch(parent, name, child_path):
-    key = f'submodule.{name}.branch'
-    local = git(parent.path, 'config', '--local', '--null', '--get-all', key, codes=(0, 1))
-    if local.returncode == 0 and len(set(local.stdout.rstrip('\0').split('\0'))) > 1:
-        fail(child_path, f'Hay varias ramas locales configuradas en {key}.')
-    try:
-        branch = value(parent.path, key)
-        if branch is None:
-            branch = value(parent.path, key, '.gitmodules')
-    except SyncError as error:
-        fail(child_path, str(error))
-    return parent.branch if branch == '.' else branch
-
-
-def absolute_url(parent, url):
-    if not url.startswith(('./', '../')):
-        return url
-    # Las URL relativas se resuelven respecto al repositorio remoto del padre.
-    remote = 'origin' if parent.detached else parent.remote
-    base = git(parent.path, 'remote', 'get-url', '--', remote).stdout.strip()
-    parsed = urlsplit(base)
-    if '://' in base:
-        return urlunsplit(parsed._replace(path=posixpath.normpath(parsed.path + '/' + url)))
-    if ':' in base and not base.startswith('/'):
-        host, remote_path = base.split(':', 1)
-        return host + ':' + posixpath.normpath(remote_path + '/' + url)
-    return str((parent.path / base / url).resolve())
-
-
-def canonical(data):
-    return json.dumps(data, sort_keys=True, ensure_ascii=True, separators=(',', ':')).encode()
-
-
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
-
-
-class GitHub:
-    """CLI autenticada; todos los datos se pasan como argumentos o JSON stdin."""
-    def __init__(self, path, repository):
-        if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):
-            fail(path, 'Nombre de repositorio GitHub inválido.')
-        self.path, self.repository = path, repository
-        self.prefix = f'repos/{repository}'
-
-    def api(self, endpoint='', method='GET', data=None):
-        args = ['gh', 'api', '--hostname', 'github.com', '--method', method,
-                self.prefix + ('/' + endpoint if endpoint else '')]
-        if data is not None:
-            args += ['--input', '-']
-        result = subprocess.run(args, cwd=self.path, input=json.dumps(data) if data is not None else None,
-                                capture_output=True, text=True,
-                                env={**os.environ, 'GH_PROMPT_DISABLED': '1'})
-        if result.returncode:
-            # No imprimir respuestas/headers que puedan contener credenciales.
-            fail(self.path, f'GitHub {method} {endpoint or self.repository} falló; revisa gh auth status y permisos (código {result.returncode}).')
-        try:
-            return json.loads(result.stdout) if result.stdout.strip() else None
-        except ValueError:
-            fail(self.path, 'Respuesta JSON inválida de GitHub.')
-
-    def pages(self, endpoint, key=None):
-        found = []
-        for page in range(1, 1001):
-            data = self.api(endpoint + ('&' if '?' in endpoint else '?') + f'per_page=100&page={page}')
-            batch = data[key] if key else data
-            if not isinstance(batch, list):
-                fail(self.path, f'Lista inválida de GitHub: {endpoint}.')
-            found.extend(batch)
-            if len(batch) < 100:
-                return found
-        fail(self.path, 'La consulta GitHub excede el límite de paginación; no se asume una lista completa.')
-
-    def branch_sha(self, branch):
-        return self.api('git/ref/heads/' + quote(branch, safe=''))['object']['sha']
-
-
-def github_name(path, remote):
-    # La configuración cruda identifica GitHub incluso si Git aplica insteadOf.
-    url = value(path, f'remote.{remote}.pushurl') or value(path, f'remote.{remote}.url') or ''
-    matched = re.fullmatch(r'(?:git@github\.com:|https://github\.com/|ssh://git@github\.com/)([^/]+/[^/]+?)(?:\.git)?/?', url)
-    if not matched:
-        fail(path, f'El remoto {remote!r} no identifica inequívocamente un repositorio en github.com.')
-    return matched[1]
-
-
-def criteria(body, path):
-    match = re.search(r'^## Criterios de aceptación\s*\n(.*?)(?=^## |\Z)', body or '', re.M | re.S)
-    rows = re.findall(r'^- \[([ xX])\] (.+)$', match[1], re.M) if match else []
-    if not rows:
-        fail(path, 'El issue no tiene una sección de Criterios de aceptación con casillas.')
-    # La explicación de verificación puede cambiar; el criterio sigue siendo el mismo.
-    return [(f'A{i}', checked.lower() == 'x', text.split(' — ', 1)[0].strip())
-            for i, (checked, text) in enumerate(rows, 1)]
-
-
-def proof_from(body, path):
-    blocks = re.findall(r'^```tunning-evidence\s*\n(.*?)^```\s*$', body or '', re.M | re.S)
-    if len(blocks) != 1:
-        fail(path, 'Falta un único bloque tunning-evidence en el issue; un push no demuestra sus criterios.')
-    try:
-        return json.loads(blocks[0])
-    except ValueError:
-        fail(path, 'El bloque tunning-evidence no contiene JSON válido.')
-
-
-def successful_run(gh, run_id, sha, workflow):
-    run = gh.api(f'actions/runs/{int(run_id)}')
-    if (run.get('head_sha') != sha or run.get('status') != 'completed' or
-            run.get('conclusion') != 'success' or run.get('path', '').split('@', 1)[0] != workflow):
-        fail(gh.path, f'CI {run_id} no acredita {workflow} con éxito para el SHA {sha}.')
-    return run
-
-
-def local_criteria_audit(gh, pr, issue_number, rows):
-    repo = Repo(gh.path)
-    repo.github, repo.issue = gh, issue_number
-    clean(repo)
-    if head(repo.path) != pr['head']['sha']:
-        fail(repo.path, 'El checkout no corresponde al SHA vigente del PR.')
-    audit = verified_audit(repo, pr, audit_policy(repo))
-    if audit['report'].get('criteria_sha256') != digest(canonical([(n, t) for n, _, t in rows])):
-        fail(repo.path, 'La auditoría no cubre los criterios vigentes del issue.')
-    return audit
-
-
-def check_criteria(gh, pr, issue_number, workflow='.github/workflows/tests.yml'):
-    issue = gh.api(f'issues/{int(issue_number)}')
-    rows = criteria(issue.get('body'), gh.path)
-    pending = [number for number, done, _ in rows if not done]
-    if pending:
-        fail(gh.path, f'Issue #{issue_number}: criterios pendientes: {", ".join(pending)}.')
-    proof = proof_from(issue.get('body'), gh.path)
-    expected = {'schema': 1, 'repository': gh.repository, 'sha': pr['head']['sha'],
-                'base_sha': pr['base']['sha'], 'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows]))}
-    if any(proof.get(key) != val for key, val in expected.items()):
-        fail(gh.path, f'Issue #{issue_number}: evidencia obsoleta o de otro PR/base/criterio.')
-    entries = proof.get('criteria', [])
-    if (not isinstance(entries, list) or len(entries) != len(rows) or
-            {e.get('id') for e in entries if isinstance(e, dict)} != {n for n, _, _ in rows}):
-        fail(gh.path, 'La evidencia no cubre exactamente todos los criterios.')
-    local = proof.get('source') == 'local-audit'
-    if proof.get('source') not in (None, 'local-audit'):
-        fail(gh.path, 'Fuente de evidencia desconocida.')
-    runs = set()
-    for entry in entries:
-        if not isinstance(entry.get('detail'), str) or not entry['detail'].strip():
-            fail(gh.path, f'Evidencia incompleta para {entry.get("id")}.')
-        if local:
-            if entry.get('audit_report_sha256') != proof.get('audit', {}).get('report_sha256'):
-                fail(gh.path, 'La evidencia no corresponde al informe local registrado.')
-        elif not isinstance(entry.get('run'), int):
-            fail(gh.path, f'Evidencia incompleta para {entry.get("id")}.')
-        else:
-            runs.add(entry['run'])
-    if local:
-        audit = local_criteria_audit(gh, pr, issue_number, rows)
-        if proof.get('audit') != {k: audit[k] for k in ('fingerprint', 'report_sha256')}:
-            fail(gh.path, 'La evidencia no corresponde a la auditoría local firmada vigente.')
-    for run_id in runs:
-        successful_run(gh, run_id, pr['head']['sha'], workflow)
-    return proof
-
-
-def issue_for_pr(gh, pr):
-    body = pr.get('body') or ''
-    # Solo directivas completas, fuera de bloques de código y comentarios HTML.
-    prose = re.sub(r'(?ms)^```.*?^```\s*$|<!--.*?-->', '', body)
-    issues = set(re.findall(r'^Closes #(\d+)\s*$', prose, re.M | re.I))
-    if len(issues) != 1:
-        fail(gh.path, 'El PR necesita una única línea Closes #N con su issue de criterios.')
-    return int(issues.pop())
-
-
-def criteria_command():
-    if not OPTIONS.repository or not OPTIONS.pr:
-        fail(Path.cwd(), 'Usa --repository owner/repo --pr N.')
-    gh = GitHub(Path.cwd(), OPTIONS.repository)
-    pr = gh.api(f'pulls/{OPTIONS.pr}')
-    issue_number = issue_for_pr(gh, pr)
-    if OPTIONS.record:
-        if bool(OPTIONS.run) == bool(OPTIONS.local_audit):
-            fail(gh.path, '--record necesita --local-audit o --run, exclusivamente.')
-        if OPTIONS.run:
-            successful_run(gh, OPTIONS.run, pr['head']['sha'], '.github/workflows/tests.yml')
-        issue = gh.api(f'issues/{issue_number}')
-        rows = criteria(issue.get('body'), gh.path)
-        entries = json.loads(OPTIONS.record.read_text())
-        if (not isinstance(entries, list) or len(entries) != len(rows) or
-                {e.get('id') for e in entries if isinstance(e, dict)} != {n for n, _, _ in rows} or
-                any(not isinstance(e.get('detail'), str) or not e['detail'].strip() for e in entries)):
-            fail(gh.path, '--record exige una explicación verificable para cada criterio; no se deduce del push.')
-        proof = {'schema': 1, 'repository': gh.repository, 'sha': pr['head']['sha'],
-                 'base_sha': pr['base']['sha'], 'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows]))}
-        if OPTIONS.local_audit:
-            audit = local_criteria_audit(gh, pr, issue_number, rows)
-            proof.update(source='local-audit', audit={k: audit[k] for k in ('fingerprint', 'report_sha256')},
-                         criteria=[dict(e, audit_report_sha256=audit['report_sha256']) for e in entries])
-        else:
-            proof['criteria'] = [dict(e, run=OPTIONS.run) for e in entries]
-        body = re.sub(r'(?ms)^```tunning-evidence\s*\n.*?^```\s*$', '', issue['body']).rstrip()
-        section = re.search(r'^## Criterios de aceptación\s*\n(.*?)(?=^## |\Z)', body, re.M | re.S)
-        checked = re.sub(r'^- \[[ xX]\]', '- [x]', section[1], flags=re.M)
-        body = body[:section.start(1)] + checked + body[section.end(1):]
-        body += '\n\n```tunning-evidence\n' + json.dumps(proof, ensure_ascii=False, indent=2) + '\n```\n'
-        gh.api(f'issues/{issue_number}', 'PATCH', {'body': body})
-    proof = check_criteria(gh, pr, issue_number)
-    if OPTIONS.local_audit:
-        if proof.get('source') != 'local-audit':
-            fail(gh.path, '--local-audit exige evidencia de una auditoría local firmada, no de Actions.')
-        fresh = gh.api(f'pulls/{OPTIONS.pr}')
-        if fresh['head']['sha'] != pr['head']['sha'] or fresh['base']['sha'] != pr['base']['sha']:
-            fail(gh.path, 'El PR cambió durante la validación; repite la evidencia local.')
-    print(f'Criterios y evidencia OK: {gh.repository} PR #{OPTIONS.pr}, issue #{issue_number}, {pr["head"]["sha"]}.')
-
-
-def state_path(repo):
-    common = git(repo.path, 'rev-parse', '--git-common-dir').stdout.removesuffix('\n')
-    return (repo.path / common).resolve() / 'tunning-sync' / 'state.json'
-
-
-def read_state(repo):
-    path = state_path(repo)
-    return json.loads(path.read_text()) if path.exists() else {}
-
-
-def save_state(repo, data):
-    path = state_path(repo)
-    path.parent.mkdir(mode=0o700, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as tmp:
-        json.dump(data, tmp, ensure_ascii=True, indent=2)
-        temporary = Path(tmp.name)
-    os.replace(temporary, path)
-
-
-def test_commands(path):
-    configured = value(path, 'tunning.testCommands')
-    if configured is None:
-        return [['python3', 'scripts/test-local.py']] if (path / 'scripts/test-local.py').is_file() else []
-    commands = json.loads(configured)
-    if (not isinstance(commands, list) or not commands or
-            any(not isinstance(c, list) or not c or any(not isinstance(a, str) or not a for a in c) for c in commands)):
-        fail(path, 'tunning.testCommands necesita un JSON no vacío de arrays de argumentos.')
-    return commands
-
-
-def test_before_push(repo):
-    commands = test_commands(repo.path)
-    repo.test_results = []
-    if not commands:
-        return
-    before = audit_snapshot(repo.path)
-    directory = Path(tempfile.mkdtemp(prefix='tunning-push-tests-'))
-    print(f'=> [{label(repo.path)}] Pruebas locales antes del push; logs: {directory}', flush=True)
-    for number, command in enumerate(commands, 1):
-        started = time.monotonic()
-        logfile = directory / f'{number}.log'
-        log_hash = hashlib.sha256()
-        with logfile.open('wb') as log:
-            with subprocess.Popen(command, cwd=repo.path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                  env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'GIT_OPTIONAL_LOCKS': '0'}) as run:
-                for line in run.stdout:
-                    log.write(line)
-                    log_hash.update(line)
-                    print(line.decode('utf-8', errors='replace'), end='', flush=True)
-                returncode = run.wait()
-        repo.test_results.append({'argv': command, 'returncode': returncode, 'log_sha256': log_hash.hexdigest(),
-                                  'log': str(logfile), 'seconds': round(time.monotonic() - started, 3)})
-        if returncode:
-            fail(repo.path, f'Pruebas locales fallidas (código {returncode}); no se publica. Log: {logfile}')
-    if audit_snapshot(repo.path) != before:
-        fail(repo.path, 'Las pruebas modificaron HEAD, índice o archivos; no se publica y se conservan los cambios.')
-    clean(repo)
-
-
-def pr_prepare(repo):
-    repo.github = GitHub(repo.path, github_name(repo.path, repo.push_remote))
-    metadata = repo.github.api()
-    if metadata.get('archived') or not metadata.get('permissions', {}).get('push'):
-        fail(repo.path, 'GitHub no permite publicar en este repositorio (sin permiso push o archivado).')
-    repo.base = value(repo.path, 'tunning.prBase') or metadata['default_branch']
-    repo.default_base = metadata['default_branch']
-    git(repo.path, 'check-ref-format', f'refs/heads/{repo.base}')
-    if repo.branch == repo.base or repo.branch == repo.default_base:
-        fail(repo.path, f'La rama {repo.branch!r} es principal/base; prepara explícitamente una rama con git switch -c antes de syncPR.')
-    repo.base_sha = repo.github.branch_sha(repo.base)
-    repo.metadata = metadata
-    repo.responsible = value(repo.path, 'tunning.responsible') or repo.github.repository.split('/')[0]
-    if not re.fullmatch(r'[A-Za-z0-9-]+', repo.responsible):
-        fail(repo.path, 'tunning.responsible debe ser un login de GitHub válido.')
-    repo.github.api('assignees/' + repo.responsible)
-    issue = OPTIONS.issue if repo.path == ROOT and OPTIONS.issue else value(repo.path, 'tunning.issue')
-    repo.issue = int(issue) if issue else None
-    if repo.issue:
-        existing = repo.github.api(f'issues/{repo.issue}')
-        receipt = read_state(repo).get('merged')
-        resumed = (receipt and read_state(repo).get('issue') == repo.issue and
-                   repo.github.api(f'pulls/{receipt["pr"]}').get('merged'))
-        if existing.get('pull_request') or (existing.get('state') != 'open' and not resumed):
-            fail(repo.path, f'Issue #{repo.issue} no es un issue abierto.')
-        criteria(existing.get('body'), repo.path)
-
-
-def pr_publish(repo):
-    gh = repo.github
-    sha = head(repo.path)
-    repo.base_sha = gh.branch_sha(repo.base)
-    comparison = gh.api('compare/' + quote(repo.base_sha, safe='') + '...' + quote(sha, safe=''))
-    if not comparison.get('ahead_by') or not comparison.get('files'):
-        print(f'=> [{label(repo.path)}] Sin diferencias con {repo.base}; no se crea PR.', flush=True)
-        return
-    query = urlencode({'state': 'open', 'head': gh.repository.split('/')[0] + ':' + repo.branch, 'base': repo.base})
-    existing = gh.pages('pulls?' + query)
-    if len(existing) > 1:
-        fail(repo.path, 'Hay varios PR abiertos para la misma rama/base; resuelve la ambigüedad.')
-    if existing:
-        existing = existing[0]
-        if repo.issue is None:
-            repo.issue = issue_for_pr(gh, existing)
-        elif issue_for_pr(gh, existing) != repo.issue:
-            fail(repo.path, 'El PR existente está asociado a otro issue; no se reemplaza esa asociación.')
-    if repo.issue is None:
-        marker = '<!-- tunning-branch:' + digest(canonical([repo.branch, repo.base])) + ' -->'
-        matches = [i for i in gh.pages('issues?state=open') if not i.get('pull_request') and marker in (i.get('body') or '')]
-        if len(matches) > 1:
-            fail(repo.path, 'Hay varios issues para la rama/base; configura tunning.issue.')
-        issue = matches[0] if matches else gh.api('issues', 'POST', {
-            'title': f'Sincronizar {repo.branch} hacia {repo.base}',
-            'assignees': [repo.responsible],
-            'body': marker + '\n\n## Criterios de aceptación\n\n- [ ] Pruebas acordadas aprobadas para el SHA vigente.\n- [ ] Cambios y referencias hijas revisados sin hallazgos pendientes.\n'})
-        repo.issue = issue['number']
-    gh.api(f'issues/{repo.issue}/assignees', 'POST', {'assignees': [repo.responsible]})
-    children = [{'path': path, 'repository': child.github.repository, 'sha': head(child.path),
-                 'pr': PRS.get(child.path, {}).get('number')} for path, _, _, _, child in repo.children]
-    block = '<!-- tunning-sync:start -->\n' + f'Rama `{repo.branch}` → `{repo.base}`; SHA `{sha}`.\n\n'
-    block += f'Closes #{repo.issue}\n\n'
-    block += 'Dependencias hijas: ' + (json.dumps(children, ensure_ascii=True) if children else 'ninguna')
-    block += '\n\nLas pruebas locales, los criterios y la auditoría deben corresponder a este SHA y base.\n<!-- tunning-sync:end -->'
-    if existing:
-        body = existing.get('body') or ''
-        # Conservar la descripción humana y su única referencia de cierre.
-        block = block.replace(f'Closes #{repo.issue}\n\n', '')
-        body = re.sub(r'<!-- tunning-sync:start -->.*?<!-- tunning-sync:end -->', '', body, flags=re.S).rstrip()
-        if not re.search(rf'^Closes #{repo.issue}\s*$', body, re.M | re.I):
-            body += f'\n\nCloses #{repo.issue}'
-        pr = gh.api(f'pulls/{existing["number"]}', 'PATCH', {'body': body + '\n\n' + block})
-    else:
-        pr = gh.api('pulls', 'POST', {'head': repo.branch, 'base': repo.base,
-                                    'title': f'Sincronizar {repo.branch}', 'body': block, 'draft': True})
-    gh.api(f'issues/{pr["number"]}/assignees', 'POST', {'assignees': [repo.responsible]})
-    PRS[repo.path] = pr
-    state = read_state(repo)
-    state.update({'schema': 1, 'path': str(repo.path), 'repository': gh.repository, 'branch': repo.branch,
-                  'base': repo.base, 'sha': sha, 'base_sha': repo.base_sha, 'issue': repo.issue,
-                  'pr': pr['number'], 'children': children,
-                  'responsible': repo.responsible,
-                  'implementer': {'provider': value(repo.path, 'tunning.implementerProvider'),
-                                  'session': value(repo.path, 'tunning.implementerSession'),
-                                  'identity': git(repo.path, 'log', '-1', '--format=%an <%ae>').stdout.strip()}})
-    if getattr(repo, 'test_results', None):
-        state['local_tests'] = {'sha': sha, 'results': repo.test_results}
-    # No reciclar la aprobación de otro SHA/base, aunque quede un informe en disco.
-    state.pop('audit', None)
-    save_state(repo, state)
-
-
-class Repo:
-    def __init__(self, path):
-        self.path = path
-        self.created = []
-        self.children = []
-
-    def check_branch_available(self):
-        worktree = git(self.path, 'for-each-ref', '--format=%(worktreepath)',
-                       f'refs/heads/{self.branch}').stdout.strip()
-        if worktree:
-            fail(self.path, f'La rama configurada {self.branch!r} está activa en otro worktree: {worktree}.')
-
-    def validate(self, parent=None, name=None):
-        test_commands(self.path)  # Rechazar preferencias inválidas antes del staging.
-        actual = Path(git(self.path, 'rev-parse', '--show-toplevel').stdout.removesuffix('\n')).resolve()
-        if actual != self.path:
-            fail(self.path, 'No es un checkout independiente del submódulo.')
-        for state in ('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge',
-                      'rebase-apply', 'sequencer', 'BISECT_START', 'index.lock'):
-            pending = git(self.path, 'rev-parse', '--git-path', state).stdout.removesuffix('\n')
-            if (self.path / pending).exists():
-                fail(self.path, f'Hay una operación Git pendiente ({state}); resuélvela primero.')
-        current = git(self.path, 'symbolic-ref', '--quiet', '--short', 'HEAD', codes=(0, 1))
-        self.detached = current.returncode == 1
-        self.branch = configured_branch(parent, name, self.path) if self.detached and parent else current.stdout.strip()
-        if not self.branch:
-            fail(self.path, 'HEAD está separado y no hay una rama configurada inequívoca en el padre.')
-        git(self.path, 'check-ref-format', f'refs/heads/{self.branch}')
-        if self.branch == 'HEAD':
-            fail(self.path, 'HEAD no es un nombre de rama válido.')
-        self.sign = ['-S'] if boolean(self.path, 'tunning.syncSign') else []
-        self.production = boolean(self.path, 'tunning.syncProduction')
-        self.remote = value(self.path, f'branch.{self.branch}.remote') or 'origin'
-        self.push_remote = (value(self.path, f'branch.{self.branch}.pushRemote') or
-                            value(self.path, 'remote.pushDefault') or self.remote)
-        merge_key = f'branch.{self.branch}.merge'
-        merges = git(self.path, 'config', '--null', '--get-all', merge_key, codes=(0, 1))
-        if merges.returncode == 0 and len(set(merges.stdout.rstrip('\0').split('\0'))) > 1:
-            fail(self.path, f'Hay varios upstreams en {merge_key}; selecciona uno antes de sincronizar.')
-        self.tracked = value(self.path, merge_key) or f'refs/heads/{self.branch}'
-        if not self.tracked.startswith('refs/heads/'):
-            fail(self.path, f'Upstream no publicable: {self.tracked!r}.')
-        git(self.path, 'check-ref-format', self.tracked)
-        for remote in {self.remote, self.push_remote}:
-            if remote == '.':
-                fail(self.path, 'El remoto local "." no permite verificar una publicación.')
-            git(self.path, 'remote', 'get-url', '--', remote)
-        urls = git(self.path, 'remote', 'get-url', '--push', '--all', '--', self.push_remote).stdout.splitlines()
-        if len(urls) != 1:
-            fail(self.path, f'El remoto {self.push_remote!r} necesita una única URL de publicación.')
-        self.push_url = urls[0]
-        self.remote_heads = heads(self.path, self.remote)
-        heads(self.path, self.push_url)
-        self.branch_tip = None
-        if self.detached:
-            self.check_branch_available()
-            tip = git(self.path, 'rev-parse', '--verify', f'refs/heads/{self.branch}', codes=(0, 128))
-            if tip.returncode == 0:
-                self.branch_tip = tip.stdout.strip()
-                self.common_history(self.branch_tip)
-        links(self.path)  # Valida conflictos del índice antes de crear commits.
-        if MODE in ('syncPR', 'syncPRmerge'):
-            pr_prepare(self)
-
-    def common_history(self, oid):
-        if git(self.path, 'merge-base', 'HEAD', oid, codes=(0, 1)).returncode == 1:
-            fail(self.path, f'El commit {oid} y HEAD no tienen historia común; se conserva el checkout.')
-
-    def ensure_commit(self, oid, url):
-        if git(self.path, 'cat-file', '-e', f'{oid}^{{commit}}', codes=(0, 1, 128)).returncode:
-            git(self.path, 'fetch', '--no-recurse-submodules', '--no-tags', '--', url, oid, stream=True)
-        self.common_history(oid)
-
-
-def prepare(path, parent=None, name=None):
-    repo = REPOS.setdefault(path, Repo(path))
-    repo.validate(parent, name)
-    repo.children = discover(repo)
-    return repo
-
-
-def discover(repo):
-    repo.modules = module_contents(repo.path)
-    registered = links(repo.path)
-    if not registered:
-        return []
-    if not (repo.path / '.gitmodules').is_file() or (repo.path / '.gitmodules').is_symlink():
-        fail(repo.path, 'Hay gitlinks sin un archivo .gitmodules válido.')
-    entries = git(repo.path, 'config', '--file', '.gitmodules', '--null', '--get-regexp',
-                  r'^submodule\..*\.path$', codes=(0, 1))
-    names = {}
-    for entry in entries.stdout.rstrip('\0').split('\0') if entries.stdout else []:
-        key, path = entry.split('\n', 1)
-        if path in names:
-            fail(repo.path, f'Ruta de submódulo duplicada: {path!r}.')
-        names[path] = key[len('submodule.'):-len('.path')]
-    children = []
-    for path, oid in sorted(registered.items()):
-        child_path = (repo.path / path).resolve()
-        if not child_path.is_relative_to(repo.path) or child_path == repo.path:
-            fail(repo.path, f'Ruta de submódulo fuera del repositorio: {path!r}.')
-        if path not in names:
-            fail(child_path, 'Falta el registro del submódulo en .gitmodules.')
-        name = names[path]
-        declared = value(repo.path, f'submodule.{name}.url', '.gitmodules')
-        if not declared:
-            fail(child_path, 'Falta la URL del submódulo en .gitmodules.')
-        if not (child_path / '.git').exists():
-            branch = configured_branch(repo, name, child_path)
-            if not branch:
-                fail(child_path, 'Submódulo sin inicializar y sin rama configurada para resolver HEAD separado.')
-            valid = git(repo.path, 'check-ref-format', f'refs/heads/{branch}', codes=(0, 1))
-            if valid.returncode or branch == 'HEAD':
-                fail(child_path, f'Rama configurada inválida: {branch!r}.')
-            print(f'=> [{label(child_path)}] Inicializando en el commit registrado {oid[:12]}...', flush=True)
-            try:
-                git(repo.path, 'submodule', 'update', '--init', '--checkout', '--', path, stream=True)
-            except SyncError as error:
-                fail(child_path, f'No se pudo inicializar el submódulo. {error}')
-        if value(repo.path, f'submodule.{name}.url') is None:
-            git(repo.path, 'submodule', 'init', '--', path, stream=True)
-        effective = value(repo.path, f'submodule.{name}.url')
-        urls = list(dict.fromkeys([absolute_url(repo, declared), effective]))
-        child = prepare(child_path, repo, name)
-        child.ensure_commit(oid, effective)
-        for url in urls:
-            heads(child.path, url)
-        children.append((path, name, oid, urls, child))
-    return children
-
-
-def commit_changes(repo):
-    print(f'=> [{label(repo.path)}] Agregando cambios...', flush=True)
-    overrides = [arg for _, name, _, _, _ in repo.children for arg in ('-c', f'submodule.{name}.ignore=none')]
-    git(repo.path, *overrides, 'add', '-A', '--', stream=True)
-    changed = git(repo.path, 'diff', '--cached', '--quiet', '--ignore-submodules=none', codes=(0, 1))
-    if changed.returncode == 0:
-        print(f'=> [{label(repo.path)}] No hay cambios para crear un commit.', flush=True)
-        return
-    months = ('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
-              'septiembre', 'octubre', 'noviembre', 'diciembre')
-    now = datetime.datetime.now()
-    host = socket.gethostname()
-    if os.environ.get('TUNNING_PROFILE') == 'cloudshell' or os.environ.get('CLOUD_SHELL') or Path('/google/devshell/bashrc.google').exists():
-        host = 'CSE'
-    message = f'{pwd.getpwuid(os.geteuid()).pw_name}@{host} {now.day}{months[now.month-1]}{now:%H:%M} - {MESSAGE}'
-    print(f'=> [{label(repo.path)}] Creando commit: {message}', flush=True)
-    git(repo.path, 'commit', *repo.sign, '-m', message, stream=True)
-    repo.created.append(head(repo.path))
-
-
-def integrate(repo, args, description):
-    before = fingerprint(repo.path)
-    previous = head(repo.path)
-    print(f'=> [{label(repo.path)}] Integrando {description}...', flush=True)
-    git(repo.path, *args, stream=True)
-    current = head(repo.path)
-    if current != previous:
-        target = git(repo.path, 'rev-parse', 'FETCH_HEAD').stdout.strip() if args[0] == 'pull' else args[-1]
-        parents = git(repo.path, 'log', '-1', '--format=%P').stdout.split()
-        if current != target and len(parents) > 1 and parents[0] == previous:
-            repo.created.append(current)
-    if fingerprint(repo.path) != before:
-        for removed in set(before[0]) - set(links(repo.path)):
-            if (repo.path / removed).exists():
-                fail(repo.path, f'El merge retiró {removed!r}; su directorio se conserva. Resuelve esa eliminación antes del push.')
-        # Un merge puede añadir módulos o cambiar gitlinks/URL/ramas. Se valida
-        # nuevamente el árbol e integra el commit registrado antes de restage.
-        repo.children = discover(repo)
-        for _, _, oid, _, child in repo.children:
-            sync(child, oid)
-        commit_changes(repo)
-
-
-def attach(repo):
-    if not repo.detached:
-        actual = git(repo.path, 'symbolic-ref', '--quiet', '--short', 'HEAD').stdout.strip()
-        if actual != repo.branch:
-            fail(repo.path, 'La rama activa cambió durante la sincronización.')
-        return
-    repo.check_branch_available()
-    if repo.branch_tip:
-        if not ancestor(repo.path, repo.branch_tip, head(repo.path)):
-            fail(repo.path, 'La rama configurada no está integrada; no se mueve su referencia.')
-        # Sólo avance rápido con comparación del valor anterior. HEAD, índice
-        # y archivos se conservan intactos, sin sustituir ninguna historia.
-        git(repo.path, 'update-ref', f'refs/heads/{repo.branch}', head(repo.path), repo.branch_tip)
-        git(repo.path, 'switch', '--no-recurse-submodules', repo.branch, stream=True)
-    else:
-        git(repo.path, 'switch', '--no-recurse-submodules', '-c', repo.branch, stream=True)
-    repo.detached = False
-
-
-def verify_reference(child, oid, urls):
-    for url in urls:
-        advertised = heads(child.path, url, tags=True)
-        if oid in advertised.values():
-            continue
-        reachable = False
-        for tip in set(advertised.values()):
-            if git(child.path, 'cat-file', '-e', tip, codes=(0, 1, 128)).returncode:
-                git(child.path, 'fetch', '--no-recurse-submodules', '--no-tags', '--', url, tip, stream=True)
-            commit = git(child.path, 'rev-parse', '--verify', f'{tip}^{{commit}}', codes=(0, 128))
-            if commit.returncode == 0 and ancestor(child.path, oid, commit.stdout.strip()):
-                reachable = True
-                break
-        if not reachable:
-            fail(child.path, f'La referencia {oid} no es alcanzable en el remoto registrado {url!r}; no se publica su padre.')
-
-
-def clean(repo):
-    status = git(repo.path, 'status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none').stdout
-    if status:
-        fail(repo.path, f'Quedan cambios después de sincronizar.\n{status}')
-
-
-def external_path(repo, filename, purpose):
-    path = Path(filename).expanduser().resolve()
-    common = state_path(repo).parent.parent
-    if path.is_relative_to(repo.path) or path.is_relative_to(common):
-        fail(repo.path, f'{purpose} debe estar fuera del checkout y de su directorio Git.')
-    return path
-
-
-def audit_policy(repo):
-    name = value(repo.path, 'tunning.prPolicy')
-    if not name:
-        fail(repo.path, 'Falta tunning.prPolicy: política externa de pruebas, checks e identidades auditoras.')
-    path = external_path(repo, name, 'La política de auditoría')
-    if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o022:
-        fail(repo.path, 'La política debe pertenecer al usuario y no admitir escritura de grupo/otros.')
-    raw = path.read_bytes()
-    policy = json.loads(raw)
-    commands = policy.get('commands')
-    if (not isinstance(commands, list) or not commands or
-            any(not isinstance(c, list) or not c or any(not isinstance(a, str) or not a for a in c) for c in commands)):
-        fail(repo.path, 'La política debe acordar comandos de prueba como arrays de argumentos.')
-    if (not isinstance(policy.get('checks'), list) or
-            any(not isinstance(c, str) or not c for c in policy['checks']) or not policy.get('auditors')):
-        fail(repo.path, 'La política necesita checks como array (vacío para validación local) y auditores autorizados.')
-    policy['_sha256'] = digest(raw)
-    return policy
-
-
-def audit_snapshot(path):
-    """Archivos propios y módulos inicializados; no staging, checkout ni refresh."""
-    index = path / git(path, 'rev-parse', '--git-path', 'index').stdout.removesuffix('\n')
-    result = {'head': head(path), 'index': digest(index.read_bytes()) if index.exists() else None, 'files': {}}
-    children = links(path, committed=True)
-    files = git(path, 'ls-files', '--cached', '--others', '--exclude-standard', '-z').stdout.split('\0')
-    for filename in sorted(set(files) - {''}):
-        entry = path / filename
-        if filename in children:
-            if not (entry / '.git').exists():
-                fail(entry, 'La auditoría exige un módulo inicializado; no modifica checkouts para prepararlo.')
-            result['files'][filename] = audit_snapshot(entry)
-        elif entry.is_symlink():
-            result['files'][filename] = ['symlink', os.readlink(entry)]
-        elif entry.is_file():
-            result['files'][filename] = [entry.stat().st_mode & 0o777, digest(entry.read_bytes())]
-        else:
-            result['files'][filename] = None
-    return result
-
-
-def audit_command(repo):
-    # Auditoría aparte del flujo de implementación: no prepare/discover/sync.
-    os.environ['GIT_OPTIONAL_LOCKS'] = '0'
-    state = read_state(repo)
-    if not state.get('pr') or not state.get('implementer', {}).get('provider'):
-        fail(repo.path, 'Primero el implementador debe publicar syncPR y registrar proveedor/sesión.')
-    if not all((OPTIONS.output, OPTIONS.provider, OPTIONS.session, OPTIONS.environment, OPTIONS.signing_key)):
-        fail(repo.path, 'Auditoría: usa --output, --provider, --session, --environment y --signing-key.')
-    if not OPTIONS.approve and not OPTIONS.findings:
-        fail(repo.path, 'Declara --approve tras revisar, o --findings con hallazgos; los tests no deciden la revisión.')
-    output = external_path(repo, OPTIONS.output, 'El informe')
-    if output.exists() or Path(str(output) + '.asc').exists():
-        fail(repo.path, 'El informe o su firma ya existen; usa otra ruta para conservar la evidencia.')
-    policy = audit_policy(repo)
-    signer = policy['auditors'].get(OPTIONS.signing_key.upper())
-    if (not signer or signer.get('provider') != OPTIONS.provider or not signer.get('identity') or
-            OPTIONS.provider == state['implementer']['provider'] or OPTIONS.session == state['implementer']['session']):
-        fail(repo.path, 'La política no autoriza a este auditor independiente/proveedor/sesión.')
-    gh = GitHub(repo.path, state['repository'])
-    pr = gh.api(f'pulls/{state["pr"]}')
-    if (pr.get('merged') or pr.get('state') != 'open' or head(repo.path) != state['sha'] or
-            pr['head']['sha'] != state['sha'] or pr['base']['sha'] != state['base_sha']):
-        fail(repo.path, 'El manifiesto/PR cambió antes de la auditoría; el implementador debe preparar la versión vigente.')
-    clean(repo)
-    issue = gh.api(f'issues/{state["issue"]}')
-    rows = criteria(issue.get('body'), repo.path)
-    findings = json.loads(external_path(repo, OPTIONS.findings, 'Los hallazgos').read_text()) if OPTIONS.findings else []
-    if not isinstance(findings, list) or (OPTIONS.approve and findings):
-        fail(repo.path, 'Hallazgos deben ser un array; --approve requiere cero hallazgos.')
-    before, results = audit_snapshot(repo.path), []
-    for command in policy['commands']:
-        try:
-            run = subprocess.run(command, cwd=repo.path, env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'},
-                                 capture_output=True, timeout=policy.get('timeout_seconds', 600))
-            results.append({'argv': command, 'returncode': run.returncode,
-                            'log_sha256': digest(run.stdout + b'\n' + run.stderr)})
-        except subprocess.TimeoutExpired:
-            results.append({'argv': command, 'returncode': 124, 'log_sha256': digest(b'timeout')})
-        except OSError as error:
-            results.append({'argv': command, 'returncode': 127, 'log_sha256': digest(str(error).encode())})
-    try:
-        unchanged = audit_snapshot(repo.path) == before
-    except (SyncError, OSError):
-        unchanged = False
-    report = {'schema': 1, 'repository': state['repository'], 'sha': state['sha'], 'base_sha': state['base_sha'],
-              'children': links(repo.path, committed=True), 'pr': state['pr'], 'issue': state['issue'],
-              'criteria_sha256': digest(canonical([(n, t) for n, _, t in rows])), 'policy_sha256': policy['_sha256'],
-              'implementer': state['implementer'],
-              'auditor': {'provider': OPTIONS.provider, 'session': OPTIONS.session, 'environment': OPTIONS.environment,
-                          'identity': signer['identity']},
-              'tests': results, 'findings': findings, 'unchanged': unchanged,
-              'review_approved': OPTIONS.approve, 'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()}
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open('x', encoding='utf-8') as destination:
-        json.dump(report, destination, ensure_ascii=True, indent=2)
-    output.chmod(0o600)
-    signed = subprocess.run(['gpg', '--batch', '--local-user', OPTIONS.signing_key, '--armor', '--detach-sign',
-                             '--output', str(output) + '.asc', str(output)], capture_output=True)
-    if signed.returncode:
-        fail(repo.path, f'No se pudo firmar el informe {output}; se conserva sin aprobar.')
-    print(f'Informe de auditoría: {output}; firma: {output}.asc; sin cambios: {unchanged}.')
-    if not unchanged or findings or not OPTIONS.approve or any(t['returncode'] for t in results):
-        fail(repo.path, 'Auditoría fallida; informe conservado. El auditor no corrige ni revierte el código.')
-
-
-def verified_audit(repo, pr, policy):
-    filename = value(repo.path, 'tunning.auditReport')
-    if not filename:
-        fail(repo.path, 'Falta tunning.auditReport: se requiere auditoría independiente firmada para este SHA.')
-    report_path = external_path(repo, filename, 'El informe')
-    signature = Path(str(report_path) + '.asc')
-    result = subprocess.run(['gpg', '--batch', '--no-auto-key-retrieve', '--status-fd=1',
-                             '--verify', str(signature), str(report_path)], capture_output=True, text=True)
-    valid = [line.split()[2:] for line in result.stdout.splitlines() if line.startswith('[GNUPG:] VALIDSIG ')]
-    bad = any('[GNUPG:] ' + token in result.stdout for token in ('EXPKEYSIG', 'EXPSIG', 'REVKEYSIG', 'BADSIG', 'ERRSIG'))
-    if result.returncode or bad or len(valid) != 1:
-        fail(repo.path, 'Firma de auditoría inválida, expirada o revocada; no se importan claves del informe.')
-    fingerprint = valid[0][-1] if len(valid[0]) >= 10 else valid[0][0]
-    identity = policy['auditors'].get(fingerprint)
-    if not identity:
-        fail(repo.path, 'El firmante no está autorizado por la política local de auditoría.')
-    report = json.loads(report_path.read_text())
-    expected = {'schema': 1, 'repository': repo.github.repository, 'sha': head(repo.path),
-                'base_sha': pr['base']['sha'], 'children': links(repo.path, committed=True),
-                'pr': pr['number'], 'issue': repo.issue, 'policy_sha256': policy['_sha256']}
-    if any(report.get(key) != val for key, val in expected.items()):
-        fail(repo.path, 'Auditoría obsoleta: cambió SHA, base, hijos, PR, issue o política.')
-    auditor = report.get('auditor', {})
-    implementer = read_state(repo).get('implementer', {})
-    if (not implementer.get('provider') or not implementer.get('session') or
-            auditor.get('provider') != identity.get('provider') or auditor.get('identity') != identity.get('identity') or
-            not auditor.get('session') or not auditor.get('environment') or
-            auditor.get('provider') == implementer['provider'] or auditor.get('session') == implementer['session']):
-        fail(repo.path, 'Se necesita un auditor autorizado de otro proveedor y sesión independiente.')
-    if report.get('implementer') != implementer:
-        fail(repo.path, 'La identidad del implementador no coincide con el manifiesto vigente.')
-    results = report.get('tests', [])
-    if ([t.get('argv') for t in results] != policy['commands'] or
-            any(t.get('returncode') != 0 or not re.fullmatch(r'[a-f0-9]{64}', t.get('log_sha256', '')) for t in results) or
-            report.get('findings') != [] or report.get('unchanged') is not True or report.get('review_approved') is not True):
-        fail(repo.path, 'Auditoría con hallazgos, cambios de código o suites incompletas/fallidas.')
-    return {'fingerprint': fingerprint, 'report_sha256': digest(report_path.read_bytes()), 'report': report}
-
-
-def merge_checks(repo, pr, policy):
-    gh = repo.github
-    if pr.get('draft') or pr.get('mergeable') is not True or pr.get('mergeable_state') not in ('clean', 'unstable', 'has_hooks'):
-        fail(repo.path, 'PR borrador, con conflicto o estado de integración sin resolver.')
-    checks = gh.pages(f'commits/{pr["head"]["sha"]}/check-runs?filter=latest', 'check_runs')
-    statuses = gh.pages(f'commits/{pr["head"]["sha"]}/statuses')
-    latest = {}
-    for status in statuses:
-        latest.setdefault(status['context'], status['state'])
-    observed = {c['name']: c.get('conclusion') if c.get('status') == 'completed' else 'pending' for c in checks}
-    observed.update(latest)
-    if ((not observed and policy['checks']) or any(s != 'success' for s in observed.values()) or
-            any(c.get('status') != 'completed' or c.get('conclusion') != 'success' for c in checks)):
-        fail(repo.path, 'Checks pendientes, fallidos, omitidos o ausentes; no se fusiona.')
-    missing = set(policy['checks']) - set(observed)
-    if missing:
-        fail(repo.path, 'Faltan checks acordados: ' + ', '.join(sorted(missing)))
-    reviews = gh.pages(f'pulls/{pr["number"]}/reviews')
-    by_user = {}
-    for review in reviews:
-        if review.get('state') in ('APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'):
-            by_user[review['user']['login']] = review
-    if any(r['state'] == 'CHANGES_REQUESTED' for r in by_user.values()):
-        fail(repo.path, 'Hay una revisión de GitHub que solicita cambios.')
-    approved = {u for u, r in by_user.items() if r['state'] == 'APPROVED' and
-                r.get('commit_id') == pr['head']['sha'] and u != pr.get('user', {}).get('login')}
-    if not set(policy.get('reviewers', [])) <= approved:
-        fail(repo.path, 'Faltan revisiones acordadas sobre el SHA actual.')
-    # GitHub aplica también protecciones/rulesets, equipos y CODEOWNERS en el
-    # endpoint de merge normal; nunca se solicita admin override.
-
-
-def merge_tree(repo):
-    for _, _, _, _, child in repo.children:
-        merge_tree(child)
-    current_links = links(repo.path, committed=True)
-    if any(current_links.get(path) != head(child.path) for path, _, _, _, child in repo.children):
-        sync(repo)
-        fail(repo.path, 'Las fusiones hijas cambiaron referencias: nuevo commit padre publicado; necesita nuevas pruebas y auditoría antes de fusionar.')
-    state = read_state(repo)
-    receipt = state.get('merged')
-    if repo.path not in PRS:
-        if receipt:
-            merged = repo.github.api(f'pulls/{receipt["pr"]}')
-            if not merged.get('merged') or merged.get('merge_commit_sha') != receipt['sha']:
-                fail(repo.path, 'El progreso guardado no coincide con una fusión real en GitHub.')
-            repo.ensure_commit(receipt['sha'], repo.push_url)
-            if not ancestor(repo.path, receipt['sha'], head(repo.path)):
-                fail(repo.path, 'El resultado de la fusión guardada no está integrado en la rama activa.')
-            MERGED[repo.path] = receipt
-        return
-    gh = repo.github
-    pr = gh.api(f'pulls/{PRS[repo.path]["number"]}')
-    if pr.get('merged'):
-        fail(repo.path, 'El PR ya fue fusionado fuera de esta ejecución; vuelve a sincronizar y validar su resultado.')
-    if pr['head']['sha'] != head(repo.path) or pr['base']['ref'] != repo.base:
-        fail(repo.path, 'El PR cambió de SHA/base después de publicarlo.')
-    policy = audit_policy(repo)
-    proof = check_criteria(gh, pr, repo.issue, policy.get('workflow', '.github/workflows/tests.yml'))
-    audit = verified_audit(repo, pr, policy)
-    if audit['report'].get('criteria_sha256') != proof['criteria_sha256']:
-        fail(repo.path, 'La auditoría no cubre los criterios vigentes del issue.')
-    merge_checks(repo, pr, policy)
-    method = policy.get('merge_method', 'merge')
-    allowed_key = 'allow_merge_commit' if method == 'merge' else f'allow_{method}_merge'
-    if method not in ('merge', 'squash', 'rebase') or not repo.metadata.get(allowed_key):
-        fail(repo.path, f'Método de merge {method!r} no permitido por la política o GitHub.')
-    if method == 'rebase' and git(repo.path, 'rev-list', '--min-parents=2', pr['base']['sha'] + '..' + pr['head']['sha']).stdout.strip():
-        fail(repo.path, 'Rebase necesita historia lineal del PR; elige merge/squash o resuélvelo explícitamente.')
-    rebase_count = int(git(repo.path, 'rev-list', '--count', pr['base']['sha'] + '..' + pr['head']['sha']).stdout)
-    audited_tree = git(repo.path, 'rev-parse', 'HEAD^{tree}').stdout.strip()
-    clean(repo)
-    fresh = gh.api(f'pulls/{pr["number"]}')
-    remote = heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}', f'refs/heads/{repo.base}')
-    if (fresh['head']['sha'] != pr['head']['sha'] or fresh['base']['sha'] != pr['base']['sha'] or
-            remote.get(f'refs/heads/{repo.branch}') != pr['head']['sha'] or
-            remote.get(f'refs/heads/{repo.base}') != pr['base']['sha'] or head(repo.path) != pr['head']['sha'] or
-            links(repo.path, committed=True) != audit['report']['children']):
-        fail(repo.path, 'HEAD/base/referencias cambiaron justo antes de fusionar; evidencia invalidada.')
-    result = gh.api(f'pulls/{pr["number"]}/merge', 'PUT', {'sha': pr['head']['sha'], 'merge_method': method})
-    if not result.get('merged') or not result.get('sha'):
-        fail(repo.path, 'GitHub rechazó la fusión; los ancestros se detienen.')
-    receipt = {'pr': pr['number'], 'sha': result['sha'], 'head_sha': pr['head']['sha'], 'base_sha': pr['base']['sha']}
-    state['merged'], state['audit'] = receipt, audit
-    save_state(repo, state)  # La fusión remota no se deshace si falla un paso posterior.
-    MERGED[repo.path] = receipt
-    repo.ensure_commit(result['sha'], repo.push_url)
-    parents = git(repo.path, 'log', '-1', '--format=%P', result['sha']).stdout.split()
-    expected_base = (parents == [pr['base']['sha'], pr['head']['sha']] if method == 'merge' else
-                     parents == [pr['base']['sha']] if method == 'squash' else
-                     git(repo.path, 'rev-parse', result['sha'] + '~' + str(rebase_count)).stdout.strip() == pr['base']['sha'])
-    if not expected_base or git(repo.path, 'rev-parse', result['sha'] + '^{tree}').stdout.strip() != audited_tree:
-        fail(repo.path, 'La base o el contenido cambió durante la fusión remota; se guardó el resultado, pero se detienen sus padres.')
-    if ancestor(repo.path, head(repo.path), result['sha']):
-        git(repo.path, 'merge', '--ff-only', result['sha'], stream=True)
-    else:
-        # Squash/rebase conserva los commits originales y la rama activa:
-        # integra el resultado remoto mediante un merge firmado, sin reset.
-        integrate(repo, ['merge', '--no-edit', '--no-autostash', *repo.sign, result['sha']], f'resultado {method} de PR #{pr["number"]}')
-    if git(repo.path, 'rev-parse', 'HEAD^{tree}').stdout.strip() != audited_tree:
-        fail(repo.path, 'Integrar la fusión cambió el contenido auditado; se conserva el trabajo y se detienen sus padres.')
-    clean(repo)
-    for path, _, _, urls, child in repo.children:
-        verify_reference(child, links(repo.path, committed=True)[path], urls)
-    test_before_push(repo)
-    git(repo.path, 'push', '--recurse-submodules=check', '--', repo.push_remote,
-        f'HEAD:refs/heads/{repo.branch}', stream=True)
-    if heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}') != head(repo.path):
-        fail(repo.path, 'La rama de trabajo no coincide con su publicación tras integrar la fusión.')
-    PUBLISHED[repo.path] = (head(repo.path), repo.push_remote, repo.branch)
-
-
-def sync(repo, recorded=None):
-    for _, _, oid, _, child in repo.children:
-        sync(child, oid)
-    commit_changes(repo)
-    head(repo.path)
-    if recorded and not ancestor(repo.path, recorded, head(repo.path)):
-        integrate(repo, ['merge', '--no-edit', '--no-autostash', *repo.sign, recorded], f'commit registrado {recorded[:12]}')
-    if repo.branch_tip and not ancestor(repo.path, repo.branch_tip, head(repo.path)):
-        integrate(repo, ['merge', '--no-edit', '--no-autostash', *repo.sign, repo.branch_tip], f'rama configurada {repo.branch}')
-    if repo.tracked in repo.remote_heads:
-        integrate(repo, ['pull', '--no-rebase', '--no-edit', '--no-autostash', '--no-recurse-submodules',
-                         *repo.sign, '--', repo.remote, repo.tracked], f'{repo.remote}/{repo.tracked[len("refs/heads/"):]}')
-    if repo.production and 'refs/heads/production' in repo.remote_heads and repo.branch != 'production':
-        integrate(repo, ['pull', '--no-rebase', '--no-edit', '--no-autostash', '--no-recurse-submodules',
-                         *repo.sign, '--', repo.remote, 'production'], f'{repo.remote}/production')
-    if MODE in ('syncPR', 'syncPRmerge'):
-        base_sha = repo.github.branch_sha(repo.base)
-        repo.ensure_commit(base_sha, repo.push_url)
-        if not ancestor(repo.path, base_sha, head(repo.path)):
-            integrate(repo, ['merge', '--no-edit', '--no-autostash', *repo.sign, base_sha], f'base PR {repo.base}')
-    # Los hooks también pueden cambiar .gitmodules durante un commit. La URL
-    # que se va a publicar debe ser la misma que se haya validado, sin cachés.
-    if module_contents(repo.path) != repo.modules:
-        repo.children = discover(repo)
-        for _, _, oid, _, child in repo.children:
-            sync(child, oid)
-        commit_changes(repo)
-        if module_contents(repo.path) != repo.modules:
-            fail(repo.path, '.gitmodules volvió a cambiar durante la confirmación; revisa los hooks.')
-    attach(repo)
-    clean(repo)
-    committed = links(repo.path, committed=True)
-    if set(committed) != {path for path, _, _, _, _ in repo.children}:
-        fail(repo.path, 'Los submódulos cambiaron después de validar el árbol; se detiene el push.')
-    for path, _, _, urls, child in repo.children:
-        oid = committed.get(path)
-        if oid != head(child.path) or PUBLISHED.get(child.path, (None,))[0] != oid:
-            fail(child.path, 'La referencia cambió después de publicar el hijo; se detiene su padre.')
-        clean(child)
-        verify_reference(child, oid, urls)
-    test_before_push(repo)
-    print(f'=> [{label(repo.path)}] Publicando {repo.push_remote}/{repo.branch}...', flush=True)
-    upstream = [] if value(repo.path, f'branch.{repo.branch}.remote') and value(repo.path, f'branch.{repo.branch}.merge') else ['--set-upstream']
-    expected = head(repo.path)
-    git(repo.path, 'push', '--recurse-submodules=check', *upstream, '--', repo.push_remote,
-        f'HEAD:refs/heads/{repo.branch}', stream=True)
-    actual = heads(repo.path, repo.push_url, f'refs/heads/{repo.branch}').get(f'refs/heads/{repo.branch}')
-    if actual != expected or head(repo.path) != expected:
-        fail(repo.path, 'El HEAD local y la rama publicada no coinciden después del push.')
-    clean(repo)
-    PUBLISHED[repo.path] = (expected, repo.push_remote, repo.branch)
-    if MODE in ('syncPR', 'syncPRmerge'):
-        pr_publish(repo)
-
-
-def summary(title):
-    print(title, flush=True)
-    for path, (oid, remote, branch) in PUBLISHED.items():
-        created = ', '.join(commit[:12] for commit in REPOS[path].created) or 'ninguno'
-        print(f'  [{label(path)}] {remote}/{branch} -> {oid[:12]}; commits creados: {created}', flush=True)
-        if path in PRS:
-            repo = REPOS[path]
-            print(f'    base: {repo.base}; issue #{repo.issue}; PR {PRS[path]["html_url"]}', flush=True)
-    for path, receipt in MERGED.items():
-        print(f'  [{label(path)}] PR #{receipt["pr"]} fusionado: {receipt["sha"]}; progreso guardado.', flush=True)
-
-
-try:
-    if MODE == 'criteria':
-        criteria_command()
-        sys.exit(0)
-    if MODE not in ('sync', 'syncPR', 'syncPRmerge', 'audit'):
-        fail(Path.cwd(), f'Modo desconocido: {MODE}.')
-    ROOT = Path(git(Path.cwd(), 'rev-parse', '--show-toplevel').stdout.removesuffix('\n')).resolve()
-    if MODE == 'audit':
-        audit_command(Repo(ROOT))
-        sys.exit(0)
-    print('=> Validando repositorios y submódulos antes de confirmar cambios...', flush=True)
-    root = prepare(ROOT)
-    sync(root)
-    if MODE == 'syncPRmerge':
-        merge_tree(root)
-    for path, (oid, _, _) in PUBLISHED.items():
-        if head(path) != oid:
-            fail(path, 'HEAD cambió después de la publicación.')
-        clean(REPOS[path])
-    summary(f'Sincronizados {len(PUBLISHED)} repositorios:')
-except (SyncError, OSError, ValueError, KeyError, TypeError) as error:
-    print(f'git {MODE}: {error}', file=sys.stderr, flush=True)
-    if PUBLISHED:
-        summary('Publicaciones completadas antes del error (sincronización incompleta):')
-    sys.exit(1)
-except KeyboardInterrupt:
-    print('git sync: Interrumpido; los padres pendientes no se publicaron.', file=sys.stderr)
-    sys.exit(130)
-PY
+HEAD separado necesita submodule.<nombre>.branch; branch=. usa la rama padre.
+Se respetan firmas, remotos, ramas activas y configuración por repositorio.
+Los modos PR necesitan gh autenticado en github.com y una rama distinta de la
+base (tunning.prBase o rama predeterminada real). No crean ramas arbitrarias.
+Política/auditorías externas: tunning.prPolicy y tunning.auditReport.
+Comprobaciones: tunning.testCommands (JSON de arrays de argumentos) o
+bash scripts/verify.sh cuando existe. Un fallo bloquea el push y sus padres.
+Ver docs/GIT-PR.md para evidencia, firmas, comprobaciones y reanudación.'
+MODO=sync
+if [[ ${1-} == --tunning-mode=* ]]; then MODO=${1#*=}; shift; fi
+if [[ ${1-} == --help || ${1-} == -h ]]; then printf '%s\n' "$AYUDA"; exit 0; fi
+RAIZ= MENSAJE= OPCIONES='{}' TEMPORALES= ESTADO_GIT=0
+PID_SINCRONIZACION=$BASHPID
+CONTADOR_CAPTURAS=0
+# Las claves son rutas absolutas. Los valores estructurados usan el módulo JSON Bash.
+declare -a REPOSITORIOS=()
+declare -Ag RAMA=() CABEZA_SEPARADA=() FIRMA=() INTEGRAR_PRODUCCION=() REMOTO=()
+declare -Ag REMOTO_PUBLICACION=() REFERENCIA_REMOTA=() URL_PUBLICACION=() CABEZAS_REMOTAS=()
+declare -Ag PUNTA_RAMA=() CONFIGURACION_MODULOS=() HIJOS=() CONFIRMACIONES_CREADAS=()
+declare -Ag RESULTADOS_COMPROBACIONES=() PUBLICADOS=() SOLICITUDES_CAMBIO=() FUSIONADOS=()
+declare -Ag BASE=() SHA_BASE=() BASE_PREDETERMINADA=() METADATOS=()
+declare -Ag RESPONSABLE=() INCIDENCIA=() REPOSITORIO_GITHUB=()
+
+rotulo() {
+    local ruta=$1
+    if [[ -n $RAIZ && $ruta == "$RAIZ" ]]; then printf '.'
+    elif [[ -n $RAIZ && $ruta == "$RAIZ/"* ]]; then printf '%s' "${ruta#"$RAIZ/"}"
+    else printf '%s' "$ruta"; fi
+}
+fallar() { printf 'git %s: [%s] %s\n' "$MODO" "$(rotulo "$1")" "$2" >&2; exit 1; }
+esta_dentro() { [[ $1 == "$2" || $1 == "$2/"* ]]; }
+huella_archivo() { local suma; suma=$(sha256sum -- "$1") || return; printf '%s' "${suma%% *}"; }
+huella_texto() { local suma; suma=$(printf '%s' "$1" | sha256sum) || return; printf '%s' "${suma%% *}"; }
+# La sustitución normal de Bash recorta saltos de línea finales de los datos.
+capturar_texto() {
+    local _texto_destino=$1 _texto_capturado; shift
+    _texto_capturado=$("$@"; printf '\034')
+    _texto_capturado=${_texto_capturado%$'\034'}
+    printf -v "$_texto_destino" '%s' "$_texto_capturado"
+}
+ruta_real() { local _ruta_resuelta; capturar_texto _ruta_resuelta realpath -m -- "$1"; printf '%s' "${_ruta_resuelta%$'\n'}"; }
+resolver_ruta() { if [[ $2 == /* ]]; then ruta_real "$2"; else ruta_real "$1/$2"; fi; }
+
+# Capturar sin evaluación shell. Los estados permitidos se declaran en cada llamada.
+capturar_git() {
+    local _captura_ruta=$1 _captura_destino=$2 _captura_codigos=$3 _captura_archivo _captura_error _captura_estado _captura_texto _captura_comando
+    shift 3
+    CONTADOR_CAPTURAS=$((CONTADOR_CAPTURAS + 1))
+    _captura_archivo="$TEMPORALES/git-$BASHPID-$CONTADOR_CAPTURAS.salida"
+    _captura_error="$TEMPORALES/git-$BASHPID-$CONTADOR_CAPTURAS.error"
+    if GIT_LITERAL_PATHSPECS=1 git -C "$_captura_ruta" -c submodule.recurse=false -c fetch.recurseSubmodules=false "$@" >"$_captura_archivo" 2>"$_captura_error"; then _captura_estado=0; else _captura_estado=$?; fi
+    ESTADO_GIT=$_captura_estado
+    if [[ " $_captura_codigos " != *" $_captura_estado "* ]]; then
+        _captura_comando=$1
+        if [[ $_captura_comando == -c ]]; then local -a _captura_argumentos=("$@"); local _captura_indice=0; while [[ ${_captura_argumentos[$_captura_indice]} == -c ]]; do _captura_indice=$((_captura_indice + 2)); done; _captura_comando=${_captura_argumentos[$_captura_indice]}; fi
+        _captura_texto=$(<"$_captura_error")
+        fallar "$_captura_ruta" "$_captura_comando falló (código $_captura_estado).${_captura_texto:+$'\n'$_captura_texto}"
+    fi
+    capturar_texto _captura_texto cat -- "$_captura_archivo"
+    _captura_texto=${_captura_texto%$'\n'}
+    printf -v "$_captura_destino" '%s' "$_captura_texto"
+}
+# Variante binaria para las listas NUL; el destino pertenece al directorio temporal.
+guardar_salida_git() {
+    local ruta=$1 salida=$2; shift 2
+    if GIT_LITERAL_PATHSPECS=1 git -C "$ruta" -c submodule.recurse=false -c fetch.recurseSubmodules=false "$@" >"$salida"; then return 0; else fallar "$ruta" "${1-} falló al leer datos Git."; fi
+}
+ejecutar_git() {
+    local ruta=$1 codigo; shift
+    if GIT_LITERAL_PATHSPECS=1 git -C "$ruta" -c submodule.recurse=false -c fetch.recurseSubmodules=false "$@"; then return 0; else codigo=$?; fallar "$ruta" "${1-} falló (código $codigo)."; fi
+}
+valor_configuracion() {
+    local ruta=$1 clave=$2 archivo=${3-} entrada resultado= primero= encontrado=false
+    local salida; salida=$(mktemp "$TEMPORALES/config.XXXXXX")
+    local -a argumentos=(config); [[ -z $archivo ]] || argumentos+=(--file "$archivo")
+    if GIT_LITERAL_PATHSPECS=1 git -C "$ruta" -c submodule.recurse=false -c fetch.recurseSubmodules=false "${argumentos[@]}" --null --get-all "$clave" >"$salida"; then :
+    else local codigo=$?; [[ $codigo == 1 ]] || fallar "$ruta" "No se pudo leer $clave."; return 0; fi
+    while IFS= read -r -d '' entrada; do
+        if [[ -n $archivo && $encontrado == true && $entrada != "$primero" ]]; then fallar "$ruta" "Configuración ambigua: $clave en $archivo."; fi
+        primero=$entrada; encontrado=true; resultado=$entrada
+    done <"$salida"
+    printf '%s' "$resultado"
+}
+valor_booleano() {
+    local resultado; capturar_git "$1" resultado '0 1' config --type=bool --get "$2"
+    if [[ $ESTADO_GIT == 1 || $resultado == true ]]; then printf true; else printf false; fi
+}
+obtener_sha() { local resultado; capturar_git "$1" resultado 0 rev-parse --verify HEAD; printf '%s' "$resultado"; }
+es_ancestro() { local resultado; capturar_git "$1" resultado '0 1' merge-base --is-ancestor "$2" "$3"; [[ $ESTADO_GIT == 0 ]]; }
+referencias_remotas() {
+    local ruta=$1 remoto=$2; shift 2
+    local resultado identificador referencia datos_json='{}'; capturar_git "$ruta" resultado 0 ls-remote --heads -- "$remoto" "$@"
+    while IFS=$'\t' read -r identificador referencia; do [[ -n $identificador ]] || continue; datos_json=$(asignar_clave_json "$datos_json" "$referencia" "$(citar_json "$identificador")"); done <<< "$resultado"
+    printf '%s' "$datos_json"
+}
+referencias_y_etiquetas_remotas() {
+    local ruta=$1 remoto=$2 resultado identificador referencia datos_json='{}'; capturar_git "$ruta" resultado 0 ls-remote --heads --tags -- "$remoto"
+    while IFS=$'\t' read -r identificador referencia; do [[ -n $identificador ]] || continue; datos_json=$(asignar_clave_json "$datos_json" "$referencia" "$(citar_json "$identificador")"); done <<< "$resultado"
+    printf '%s' "$datos_json"
+}
+referencias_modulos() {
+    local ruta=$1 confirmados=${2-false} salida entrada metadatos nombre modo tipo identificador datos_json='{}'
+    salida=$(mktemp "$TEMPORALES/referencias_modulos.XXXXXX")
+    if [[ $confirmados == true ]]; then guardar_salida_git "$ruta" "$salida" ls-tree -rz HEAD; else guardar_salida_git "$ruta" "$salida" ls-files --stage -z; fi
+    while IFS= read -r -d '' entrada; do
+        metadatos=${entrada%%$'\t'*}; nombre=${entrada#*$'\t'}; read -r modo tipo identificador <<< "$metadatos"
+        if [[ $confirmados == true ]]; then [[ $modo == 160000 ]] || continue
+        elif [[ $identificador != 0 ]]; then fallar "$ruta" "Hay conflictos sin resolver en $(printf '%q' "$nombre")."
+        elif [[ $modo == 160000 ]]; then identificador=$tipo
+        else continue; fi
+        datos_json=$(asignar_clave_json "$datos_json" "$nombre" "$(citar_json "$identificador")")
+    done <"$salida"
+    printf '%s' "$datos_json"
+}
+contenido_modulos() {
+    local nombre_archivo="$1/.gitmodules"
+    [[ ! -L $nombre_archivo ]] || fallar "$1" '.gitmodules no puede ser un enlace simbólico.'
+    if [[ -f $nombre_archivo ]]; then huella_archivo "$nombre_archivo"; else huella_texto ''; fi
+}
+huella_repositorio() { agregar_json "$(agregar_json '[]' "$(referencias_modulos "$1")")" "$(citar_json "$(contenido_modulos "$1")")"; }
+rama_configurada() {
+    local padre=$1 nombre=$2 hijo=$3 clave="submodule.$2.branch" salida entrada rama= primero= encontrado=false
+    salida=$(mktemp "$TEMPORALES/rama.XXXXXX")
+    if git -C "$padre" config --local --null --get-all "$clave" >"$salida"; then
+        while IFS= read -r -d '' entrada; do
+            [[ $encontrado == false || $entrada == "$primero" ]] || fallar "$hijo" "Hay varias ramas locales configuradas en $clave."
+            primero=$entrada; encontrado=true
+        done <"$salida"
+    else local codigo=$?; [[ $codigo == 1 ]] || fallar "$hijo" "No se pudo leer $clave."; fi
+    capturar_git "$padre" rama '0 1' config --get "$clave"
+    # Un valor local vacío también es una preferencia: no lo reemplaza .gitmodules.
+    if [[ $ESTADO_GIT == 1 ]]; then rama=$(valor_configuracion "$padre" "$clave" .gitmodules); fi
+    if [[ $rama == . ]]; then printf '%s' "${RAMA[$padre]}"; else printf '%s' "$rama"; fi
+}
+normalizar_ruta_remota() {
+    local ruta=$1 parte resto=$1 resultado= absoluta=false; local -a pila=() partes=()
+    [[ $ruta != /* ]] || absoluta=true
+    while [[ $resto == */* ]]; do partes+=("${resto%%/*}"); resto=${resto#*/}; done
+    partes+=("$resto")
+    for parte in "${partes[@]}"; do
+        case "$parte" in ''|.) ;; ..) if ((${#pila[@]})) && [[ ${pila[-1]} != .. ]]; then unset 'pila[-1]'; elif [[ $absoluta == false ]]; then pila+=(..); fi ;; *) pila+=("$parte") ;; esac
+    done
+    local IFS=/; resultado="${pila[*]}"; if [[ $absoluta == true ]]; then resultado="/$resultado"; fi
+    printf '%s' "${resultado:-.}"
+}
+url_absoluta() {
+    local padre=$1 direccion=$2 remoto base prefijo ruta normalizada sufijo=
+    if [[ $direccion != ./* && $direccion != ../* ]]; then printf '%s' "$direccion"; return; fi
+    if [[ ${CABEZA_SEPARADA[$padre]} == true ]]; then remoto=origin; else remoto=${REMOTO[$padre]}; fi
+    capturar_git "$padre" base 0 remote get-url -- "$remoto"
+    if [[ $base == *://* ]]; then
+        local esquema=${base%%://*} resto=${base#*://} autoridad
+        autoridad=${resto%%/*}; ruta=${resto#"$autoridad"}; prefijo="$esquema://$autoridad"
+        if [[ $ruta == *\?* || $ruta == *\#* ]]; then sufijo=${ruta#"${ruta%%[?#]*}"}; ruta=${ruta%%[?#]*}; fi
+        capturar_texto normalizada normalizar_ruta_remota "$ruta/$direccion"
+        printf '%s%s%s' "$prefijo" "$normalizada" "$sufijo"
+    elif [[ $base == *:* && $base != /* ]]; then capturar_texto normalizada normalizar_ruta_remota "${base#*:}/$direccion"; printf '%s:%s' "${base%%:*}" "$normalizada"
+    else capturar_texto ruta resolver_ruta "$padre" "$base"; ruta_real "$ruta/$direccion"; fi
+}
+ruta_estado() { local comun; capturar_git "$1" comun 0 rev-parse --git-common-dir; capturar_texto comun resolver_ruta "$1" "$comun"; printf '%s/tunning-sync/state.json' "$comun"; }
+leer_estado() { local nombre_archivo; nombre_archivo=$(ruta_estado "$1"); if [[ -f $nombre_archivo ]]; then canonizar_json "$(<"$nombre_archivo")"; else printf '{}'; fi; }
+guardar_estado() {
+    local ruta=$1 datos=$2 nombre_archivo directorio temporal; nombre_archivo=$(ruta_estado "$ruta"); directorio=${nombre_archivo%/*}
+    mkdir -p -m 700 -- "$directorio"; temporal=$(mktemp "$directorio/.estado.XXXXXX")
+    canonizar_json "$datos" >"$temporal"; chmod 600 "$temporal"; mv -f -- "$temporal" "$nombre_archivo"
+}
+comandos_comprobacion() {
+    local ruta=$1 resultado
+    capturar_git "$ruta" resultado '0 1' config --get tunning.testCommands
+    if [[ $ESTADO_GIT == 1 ]]; then if [[ -f $ruta/scripts/verify.sh ]]; then printf '[["bash","scripts/verify.sh"]]'; else printf '[]'; fi; return; fi
+    comandos_validos "$resultado" || fallar "$ruta" 'tunning.testCommands necesita un JSON no vacío de arrays de argumentos.'
+    canonizar_json "$resultado"
+}
+comandos_validos() {
+    local comandos=$1 orden argumento
+    json_valido "$comandos" && [[ $(tipo_json "$comandos") == array && $(longitud_json "$comandos") -gt 0 ]] || return 1
+    while IFS= read -r orden; do
+        [[ $(tipo_json "$orden") == array && $(longitud_json "$orden") -gt 0 ]] || return 1
+        while IFS= read -r argumento; do [[ $(tipo_json "$argumento") == string && -n $(obtener_texto_json "$argumento" '') ]] || return 1; done < <(elementos_json "$orden")
+    done < <(elementos_json "$comandos")
+}
+inventariar_repositorio() {
+    local ruta=$1 indice resultado confirmados archivos nombre_archivo entrada detalle modo archivos_json='{}'
+    capturar_git "$ruta" indice 0 rev-parse --git-path index
+    capturar_texto indice resolver_ruta "$ruta" "$indice"
+    if [[ -f $indice ]]; then indice=$(huella_archivo "$indice"); else indice=; fi
+    confirmados=$(referencias_modulos "$ruta" true); archivos=$(mktemp "$TEMPORALES/inventario.XXXXXX")
+    guardar_salida_git "$ruta" "$archivos" ls-files --cached --others --exclude-standard -z
+    while IFS= read -r -d '' nombre_archivo; do
+        [[ -n $nombre_archivo ]] || continue; entrada="$ruta/$nombre_archivo"
+        if tiene_clave_json "$confirmados" "$nombre_archivo"; then
+            [[ -e $entrada/.git ]] || fallar "$entrada" 'La auditoría exige un módulo inicializado; no modifica checkouts para prepararlo.'
+            detalle=$(inventariar_repositorio "$entrada")
+        elif [[ -L $entrada ]]; then
+            local destino_enlace; capturar_texto destino_enlace readlink -- "$entrada"; destino_enlace=${destino_enlace%$'\n'}
+            detalle=$(agregar_json '["symlink"]' "$(citar_json "$destino_enlace")")
+        elif [[ -f $entrada ]]; then modo=$(stat -c %a -- "$entrada"); modo=$((8#$modo & 0777)); detalle=$(agregar_json "[$modo]" "$(citar_json "$(huella_archivo "$entrada")")")
+        else detalle=null; fi
+        archivos_json=$(asignar_clave_json "$archivos_json" "$nombre_archivo" "$detalle")
+    done <"$archivos"
+    if [[ -n $indice ]]; then indice=$(citar_json "$indice"); else indice=null; fi
+    objeto_json head "$(citar_json "$(obtener_sha "$ruta")")" index "$indice" files "$archivos_json"
+}
+comprobar_limpieza() { local estado; capturar_git "$1" estado 0 status --porcelain=v1 --untracked-files=all --ignore-submodules=none; [[ -z $estado ]] || fallar "$1" "Quedan cambios después de sincronizar."$'\n'"$estado"; }
+ruta_externa() {
+    local repositorio=$1 nombre_archivo=$2 proposito=$3 ruta comun
+    [[ $nombre_archivo != '~' ]] || nombre_archivo=$HOME
+    [[ $nombre_archivo != '~/'* ]] || nombre_archivo="$HOME/${nombre_archivo:2}"
+    capturar_texto ruta ruta_real "$nombre_archivo"; comun=$(ruta_estado "$repositorio"); comun=${comun%/*/*}
+    if esta_dentro "$ruta" "$repositorio" || esta_dentro "$ruta" "$comun"; then fallar "$repositorio" "$proposito debe estar fuera del checkout y de su directorio Git."; fi
+    printf '%s' "$ruta"
+}
+comprobar_antes_de_publicar() {
+    local repositorio=$1 comandos anterior directorio orden archivo_registro codigo inicio fin duracion resultado
+    local -a argumentos_comando=()
+    comandos=$(comandos_comprobacion "$repositorio"); RESULTADOS_COMPROBACIONES[$repositorio]='[]'
+    [[ $comandos != '[]' ]] || return 0
+    anterior=$(inventariar_repositorio "$repositorio"); directorio=$(mktemp -d /tmp/tunning-push-checks.XXXXXX)
+    printf '=> [%s] Comprobaciones locales antes del push; logs: %s\n' "$(rotulo "$repositorio")" "$directorio"
+    local numero=0
+    while IFS= read -r orden; do
+        numero=$((numero + 1)); archivo_registro="$directorio/$numero.log"; inicio=$(date +%s%N)
+        argumentos_comando=(); local argumento
+        while IFS= read -r argumento; do capturar_texto argumento obtener_texto_json "$argumento" ''; argumentos_comando+=("$argumento"); done < <(elementos_json "$orden")
+        if (cd -- "$repositorio" && GIT_OPTIONAL_LOCKS=0 "${argumentos_comando[@]}") >"$archivo_registro" 2>&1; then codigo=0; else codigo=$?; fi
+        cat -- "$archivo_registro"; fin=$(date +%s%N); duracion=$(awk -v inicio="$inicio" -v terminar="$fin" 'BEGIN {printf "%.3f",(terminar-inicio)/1000000000}')
+        resultado=$(objeto_json argv "$orden" returncode "$codigo" log_sha256 "$(citar_json "$(huella_archivo "$archivo_registro")")" log "$(citar_json "$archivo_registro")" seconds "$duracion")
+        RESULTADOS_COMPROBACIONES[$repositorio]=$(agregar_json "${RESULTADOS_COMPROBACIONES[$repositorio]}" "$resultado")
+        [[ $codigo == 0 ]] || fallar "$repositorio" "Comprobaciones locales fallidas (código $codigo); no se publica. Log: $archivo_registro"
+    done < <(elementos_json "$comandos")
+    json_iguales "$(inventariar_repositorio "$repositorio")" "$anterior" || fallar "$repositorio" 'Las comprobaciones modificaron HEAD, índice o archivos; no se publica y se conservan los cambios.'
+    comprobar_limpieza "$repositorio"
+}
+comprobar_disponibilidad_rama() {
+    local ruta=$1 arbol_trabajo
+    capturar_git "$ruta" arbol_trabajo 0 for-each-ref '--format=%(worktreepath)' "refs/heads/${RAMA[$ruta]}"
+    [[ -z $arbol_trabajo ]] || fallar "$ruta" "La rama configurada ${RAMA[$ruta]} está activa en otro árbol de trabajo: $arbol_trabajo."
+}
+comprobar_historia_comun() {
+    local resultado; capturar_git "$1" resultado '0 1' merge-base HEAD "$2"
+    [[ $ESTADO_GIT == 0 ]] || fallar "$1" "La confirmación $2 y HEAD no tienen historia común; se conserva el checkout."
+}
+asegurar_confirmacion() {
+    local ruta=$1 identificador=$2 direccion=$3 resultado
+    capturar_git "$ruta" resultado '0 1 128' cat-file -e "$identificador^{commit}"
+    if [[ $ESTADO_GIT != 0 ]]; then ejecutar_git "$ruta" fetch --no-recurse-submodules --no-tags -- "$direccion" "$identificador"; fi
+    comprobar_historia_comun "$ruta" "$identificador"
+}
+validar_repositorio() {
+    local ruta=$1 padre=${2-} nombre=${3-} actual estado pendiente rama remoto clave_integracion integraciones resultado punta
+    comandos_comprobacion "$ruta" >/dev/null
+    capturar_git "$ruta" actual 0 rev-parse --show-toplevel
+    capturar_texto actual ruta_real "$actual"; [[ $actual == "$ruta" ]] || fallar "$ruta" 'No es un checkout independiente del submódulo.'
+    for estado in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply sequencer BISECT_START index.lock; do
+        capturar_git "$ruta" pendiente 0 rev-parse --git-path "$estado"
+        capturar_texto pendiente resolver_ruta "$ruta" "$pendiente"
+        [[ ! -e $pendiente ]] || fallar "$ruta" "Hay una operación Git pendiente ($estado); resuélvela primero."
+    done
+    capturar_git "$ruta" actual '0 1' symbolic-ref --quiet --short HEAD
+    if [[ $ESTADO_GIT == 1 ]]; then CABEZA_SEPARADA[$ruta]=true; else CABEZA_SEPARADA[$ruta]=false; fi
+    rama=$actual
+    if [[ ${CABEZA_SEPARADA[$ruta]} == true && -n $padre ]]; then rama=$(rama_configurada "$padre" "$nombre" "$ruta"); fi
+    [[ -n $rama ]] || fallar "$ruta" 'HEAD está separado y no hay una rama configurada inequívoca en el padre.'
+    ejecutar_git "$ruta" check-ref-format "refs/heads/$rama"
+    [[ $rama != HEAD ]] || fallar "$ruta" 'HEAD no es un nombre de rama válido.'
+    RAMA[$ruta]=$rama; FIRMA[$ruta]=
+    [[ $(valor_booleano "$ruta" tunning.syncSign) != true ]] || FIRMA[$ruta]=-S
+    INTEGRAR_PRODUCCION[$ruta]=$(valor_booleano "$ruta" tunning.syncProduction)
+    remoto=$(valor_configuracion "$ruta" "branch.$rama.remote"); REMOTO[$ruta]=${remoto:-origin}
+    remoto=$(valor_configuracion "$ruta" "branch.$rama.pushRemote")
+    [[ -n $remoto ]] || remoto=$(valor_configuracion "$ruta" remote.pushDefault)
+    REMOTO_PUBLICACION[$ruta]=${remoto:-${REMOTO[$ruta]}}
+    clave_integracion="branch.$rama.merge"; integraciones=$(mktemp "$TEMPORALES/integraciones.XXXXXX")
+    if git -C "$ruta" config --null --get-all "$clave_integracion" >"$integraciones"; then
+        local entrada primero= encontrado=false
+        while IFS= read -r -d '' entrada; do
+            [[ $encontrado == false || $entrada == "$primero" ]] || fallar "$ruta" "Hay varios upstreams en $clave_integracion; selecciona uno antes de sincronizar."
+            primero=$entrada; encontrado=true
+        done <"$integraciones"
+    else local codigo=$?; [[ $codigo == 1 ]] || fallar "$ruta" "No se pudo leer $clave_integracion."; fi
+    resultado=$(valor_configuracion "$ruta" "$clave_integracion"); REFERENCIA_REMOTA[$ruta]=${resultado:-refs/heads/$rama}
+    [[ ${REFERENCIA_REMOTA[$ruta]} == refs/heads/* ]] || fallar "$ruta" "Upstream no publicable: ${REFERENCIA_REMOTA[$ruta]}."
+    ejecutar_git "$ruta" check-ref-format "${REFERENCIA_REMOTA[$ruta]}"
+    for remoto in "${REMOTO[$ruta]}" "${REMOTO_PUBLICACION[$ruta]}"; do
+        [[ $remoto != . ]] || fallar "$ruta" 'El remoto local "." no permite verificar una publicación.'
+        capturar_git "$ruta" resultado 0 remote get-url -- "$remoto"
+    done
+    capturar_git "$ruta" resultado 0 remote get-url --push --all -- "${REMOTO_PUBLICACION[$ruta]}"
+    [[ -n $resultado && $resultado != *$'\n'* ]] || fallar "$ruta" "El remoto ${REMOTO_PUBLICACION[$ruta]} necesita una única URL de publicación."
+    URL_PUBLICACION[$ruta]=$resultado; CABEZAS_REMOTAS[$ruta]=$(referencias_remotas "$ruta" "${REMOTO[$ruta]}")
+    referencias_remotas "$ruta" "${URL_PUBLICACION[$ruta]}" >/dev/null; PUNTA_RAMA[$ruta]=
+    if [[ ${CABEZA_SEPARADA[$ruta]} == true ]]; then
+        comprobar_disponibilidad_rama "$ruta"; capturar_git "$ruta" punta '0 128' rev-parse --verify "refs/heads/$rama"
+        if [[ $ESTADO_GIT == 0 ]]; then PUNTA_RAMA[$ruta]=$punta; comprobar_historia_comun "$ruta" "$punta"; fi
+    fi
+    referencias_modulos "$ruta" >/dev/null
+    if [[ $MODO == syncPR || $MODO == syncPRmerge ]]; then preparar_pr "$ruta"; fi
+}
+preparar_repositorio() {
+    local ruta=$1 padre=${2-} nombre=${3-}
+    if [[ -z ${CONFIRMACIONES_CREADAS[$ruta]+presente} ]]; then REPOSITORIOS+=("$ruta"); CONFIRMACIONES_CREADAS[$ruta]='[]'; fi
+    validar_repositorio "$ruta" "$padre" "$nombre"; descubrir_modulos "$ruta"
+}
+descubrir_modulos() {
+    local ruta=$1 registrados entradas entrada clave nombre ruta_hijo declarada rama resultado efectiva direcciones direccion hijo identificador relativa nombres='{}' hijos='[]'
+    CONFIGURACION_MODULOS[$ruta]=$(contenido_modulos "$ruta"); registrados=$(referencias_modulos "$ruta")
+    if [[ $registrados == '{}' ]]; then HIJOS[$ruta]='[]'; return; fi
+    [[ -f $ruta/.gitmodules && ! -L $ruta/.gitmodules ]] || fallar "$ruta" 'Hay gitlinks sin un archivo .gitmodules válido.'
+    entradas=$(mktemp "$TEMPORALES/modulos.XXXXXX")
+    if git -C "$ruta" config --file .gitmodules --null --get-regexp '^submodule\..*\.path$' >"$entradas"; then :
+    else local codigo=$?; [[ $codigo == 1 ]] || fallar "$ruta" 'No se pudo leer .gitmodules.'; fi
+    while IFS= read -r -d '' entrada; do
+        clave=${entrada%%$'\n'*}; relativa=${entrada#*$'\n'}
+        if tiene_clave_json "$nombres" "$relativa"; then fallar "$ruta" "Ruta de submódulo duplicada: $relativa."; fi
+        nombre=${clave#submodule.}; nombre=${nombre%.path}; nombres=$(asignar_clave_json "$nombres" "$relativa" "$(citar_json "$nombre")")
+    done <"$entradas"
+    while IFS= read -r entrada; do
+        capturar_texto relativa obtener_texto_json "$entrada" key; identificador=$(obtener_texto_json "$entrada" value)
+        capturar_texto ruta_hijo ruta_real "$ruta/$relativa"
+        esta_dentro "$ruta_hijo" "$ruta" && [[ $ruta_hijo != "$ruta" ]] || fallar "$ruta" "Ruta de submódulo fuera del repositorio: $relativa."
+        tiene_clave_json "$nombres" "$relativa" || fallar "$ruta_hijo" 'Falta el registro del submódulo en .gitmodules.'
+        capturar_texto nombre obtener_texto_clave_json "$nombres" "$relativa"; capturar_texto declarada valor_configuracion "$ruta" "submodule.$nombre.url" .gitmodules
+        [[ -n $declarada ]] || fallar "$ruta_hijo" 'Falta la URL del submódulo en .gitmodules.'
+        if [[ ! -e $ruta_hijo/.git ]]; then
+            rama=$(rama_configurada "$ruta" "$nombre" "$ruta_hijo")
+            [[ -n $rama ]] || fallar "$ruta_hijo" 'Submódulo sin inicializar y sin rama configurada para resolver HEAD separado.'
+            capturar_git "$ruta" resultado '0 1' check-ref-format "refs/heads/$rama"
+            [[ $ESTADO_GIT == 0 && $rama != HEAD ]] || fallar "$ruta_hijo" "Rama configurada inválida: $rama."
+            printf '=> [%s] Inicializando en la confirmación registrada %.12s...\n' "$(rotulo "$ruta_hijo")" "$identificador"
+            ejecutar_git "$ruta" submodule update --init --checkout -- "$relativa"
+        fi
+        capturar_texto efectiva valor_configuracion "$ruta" "submodule.$nombre.url"
+        if [[ -z $efectiva ]]; then ejecutar_git "$ruta" submodule init -- "$relativa"; capturar_texto efectiva valor_configuracion "$ruta" "submodule.$nombre.url"; fi
+        capturar_texto declarada url_absoluta "$ruta" "$declarada"
+        direcciones=$(agregar_json '[]' "$(citar_json "$declarada")")
+        [[ $efectiva == "$declarada" ]] || direcciones=$(agregar_json "$direcciones" "$(citar_json "$efectiva")")
+        preparar_repositorio "$ruta_hijo" "$ruta" "$nombre"; asegurar_confirmacion "$ruta_hijo" "$identificador" "$efectiva"
+        while IFS= read -r hijo; do capturar_texto direccion obtener_texto_json "$hijo" ''; referencias_remotas "$ruta_hijo" "$direccion" >/dev/null; done < <(elementos_json "$direcciones")
+        hijo=$(objeto_json path "$(citar_json "$relativa")" name "$(citar_json "$nombre")" oid "$(citar_json "$identificador")" urls "$direcciones" repo "$(citar_json "$ruta_hijo")")
+        hijos=$(agregar_json "$hijos" "$hijo")
+    done < <(entradas_json "$registrados")
+    HIJOS[$ruta]=$hijos
+}
+confirmar_cambios() {
+    local ruta=$1 hijo nombre cambiado usuario equipo mensaje identificador
+    local -a ajustes=() firma=()
+    printf '=> [%s] Agregando cambios...\n' "$(rotulo "$ruta")"
+    while IFS= read -r hijo; do capturar_texto nombre obtener_texto_json "$hijo" name; ajustes+=(-c "submodule.$nombre.ignore=none"); done < <(elementos_json "${HIJOS[$ruta]}")
+    ejecutar_git "$ruta" "${ajustes[@]}" add -A --
+    capturar_git "$ruta" cambiado '0 1' diff --cached --quiet --ignore-submodules=none
+    if [[ $ESTADO_GIT == 0 ]]; then printf '=> [%s] No hay cambios para crear una confirmación.\n' "$(rotulo "$ruta")"; return; fi
+    local -a meses=(enero febrero marzo abril mayo junio julio agosto septiembre octubre noviembre diciembre)
+    local dia mes hora; read -r dia mes hora < <(date '+%d %m %H:%M'); dia=$((10#$dia)); mes=$((10#$mes - 1))
+    usuario=$(id -un); equipo=$(hostname)
+    if [[ ${TUNNING_PROFILE-} == cloudshell || -n ${CLOUD_SHELL-} || -e /google/devshell/bashrc.google ]]; then equipo=CSE; fi
+    mensaje="$usuario@$equipo $dia${meses[$mes]}$hora - $MENSAJE"
+    printf '=> [%s] Creando confirmación: %s\n' "$(rotulo "$ruta")" "$mensaje"
+    [[ -z ${FIRMA[$ruta]} ]] || firma+=("${FIRMA[$ruta]}")
+    ejecutar_git "$ruta" commit "${firma[@]}" -m "$mensaje"; identificador=$(obtener_sha "$ruta"); CONFIRMACIONES_CREADAS[$ruta]=$(agregar_json "${CONFIRMACIONES_CREADAS[$ruta]}" "$(citar_json "$identificador")")
+}
+integrar() {
+    local ruta=$1 descripcion=$2; shift 2
+    local anterior previo actual destino padres hijo retirado referencias_actuales identificador ruta_hijo
+    local -a argumentos=("$@") lista_padres=()
+    anterior=$(huella_repositorio "$ruta"); previo=$(obtener_sha "$ruta")
+    printf '=> [%s] Integrando %s...\n' "$(rotulo "$ruta")" "$descripcion"; ejecutar_git "$ruta" "${argumentos[@]}"
+    actual=$(obtener_sha "$ruta")
+    if [[ $actual != "$previo" ]]; then
+        if [[ ${argumentos[0]} == pull ]]; then capturar_git "$ruta" destino 0 rev-parse FETCH_HEAD; else destino=${argumentos[-1]}; fi
+        capturar_git "$ruta" padres 0 log -1 --format=%P; read -r -a lista_padres <<< "$padres"
+        if [[ $actual != "$destino" && ${#lista_padres[@]} -gt 1 && ${lista_padres[0]} == "$previo" ]]; then CONFIRMACIONES_CREADAS[$ruta]=$(agregar_json "${CONFIRMACIONES_CREADAS[$ruta]}" "$(citar_json "$actual")"); fi
+    fi
+    if ! json_iguales "$(huella_repositorio "$ruta")" "$anterior"; then
+        referencias_actuales=$(referencias_modulos "$ruta")
+        while IFS= read -r retirado; do
+            capturar_texto retirado obtener_texto_json "$retirado" key
+            if ! tiene_clave_json "$referencias_actuales" "$retirado" && [[ -e $ruta/$retirado ]]; then fallar "$ruta" "El merge retiró $retirado; su directorio se conserva. Resuelve esa eliminación antes del push."; fi
+        done < <(entradas_json "$(obtener_json "$anterior" 0)")
+        descubrir_modulos "$ruta"
+        while IFS= read -r hijo; do capturar_texto ruta_hijo obtener_texto_json "$hijo" repo; identificador=$(obtener_texto_json "$hijo" oid); sincronizar "$ruta_hijo" "$identificador"; done < <(elementos_json "${HIJOS[$ruta]}")
+        confirmar_cambios "$ruta"
+    fi
+}
+asociar_rama() {
+    local ruta=$1 actual identificador
+    if [[ ${CABEZA_SEPARADA[$ruta]} != true ]]; then capturar_git "$ruta" actual 0 symbolic-ref --quiet --short HEAD; [[ $actual == "${RAMA[$ruta]}" ]] || fallar "$ruta" 'La rama activa cambió durante la sincronización.'; return; fi
+    comprobar_disponibilidad_rama "$ruta"; identificador=$(obtener_sha "$ruta")
+    if [[ -n ${PUNTA_RAMA[$ruta]} ]]; then
+        es_ancestro "$ruta" "${PUNTA_RAMA[$ruta]}" "$identificador" || fallar "$ruta" 'La rama configurada no está integrada; no se mueve su referencia.'
+        ejecutar_git "$ruta" update-ref "refs/heads/${RAMA[$ruta]}" "$identificador" "${PUNTA_RAMA[$ruta]}"
+        ejecutar_git "$ruta" switch --no-recurse-submodules "${RAMA[$ruta]}"
+    else ejecutar_git "$ruta" switch --no-recurse-submodules -c "${RAMA[$ruta]}"; fi
+    CABEZA_SEPARADA[$ruta]=false
+}
+verificar_referencia() {
+    local hijo=$1 identificador=$2 direcciones=$3 elemento direccion anunciadas entrada punta confirmacion alcanzable encontrada resultado
+    while IFS= read -r elemento; do
+        capturar_texto direccion obtener_texto_json "$elemento" ''; anunciadas=$(referencias_y_etiquetas_remotas "$hijo" "$direccion"); encontrada=false
+        while IFS= read -r entrada; do [[ $(obtener_texto_json "$entrada" value) != "$identificador" ]] || encontrada=true; done < <(entradas_json "$anunciadas")
+        [[ $encontrada == false ]] || continue
+        alcanzable=false
+        while IFS= read -r entrada; do
+            punta=$(obtener_texto_json "$entrada" value); capturar_git "$hijo" resultado '0 1 128' cat-file -e "$punta"
+            if [[ $ESTADO_GIT != 0 ]]; then ejecutar_git "$hijo" fetch --no-recurse-submodules --no-tags -- "$direccion" "$punta"; fi
+            capturar_git "$hijo" confirmacion '0 128' rev-parse --verify "$punta^{commit}"
+            if [[ $ESTADO_GIT == 0 ]] && es_ancestro "$hijo" "$identificador" "$confirmacion"; then alcanzable=true; break; fi
+        done < <(entradas_json "$anunciadas")
+        [[ $alcanzable == true ]] || fallar "$hijo" "La referencia $identificador no es alcanzable en el remoto registrado $direccion; no se publica su padre."
+    done < <(elementos_json "$direcciones")
+}
+sincronizar() {
+    local ruta=$1 registrado=${2-} hijo ruta_hijo identificador actual confirmados esperado remoto_seguimiento integracion_seguimiento sha_base
+    local -a firma=() seguimiento=()
+    while IFS= read -r hijo; do capturar_texto ruta_hijo obtener_texto_json "$hijo" repo; identificador=$(obtener_texto_json "$hijo" oid); sincronizar "$ruta_hijo" "$identificador"; done < <(elementos_json "${HIJOS[$ruta]}")
+    confirmar_cambios "$ruta"; obtener_sha "$ruta" >/dev/null
+    [[ -z ${FIRMA[$ruta]} ]] || firma+=("${FIRMA[$ruta]}")
+    if [[ -n $registrado ]] && ! es_ancestro "$ruta" "$registrado" "$(obtener_sha "$ruta")"; then integrar "$ruta" "confirmación registrada ${registrado:0:12}" merge --no-edit --no-autostash "${firma[@]}" "$registrado"; fi
+    if [[ -n ${PUNTA_RAMA[$ruta]} ]] && ! es_ancestro "$ruta" "${PUNTA_RAMA[$ruta]}" "$(obtener_sha "$ruta")"; then integrar "$ruta" "rama configurada ${RAMA[$ruta]}" merge --no-edit --no-autostash "${firma[@]}" "${PUNTA_RAMA[$ruta]}"; fi
+    if tiene_clave_json "${CABEZAS_REMOTAS[$ruta]}" "${REFERENCIA_REMOTA[$ruta]}"; then integrar "$ruta" "${REMOTO[$ruta]}/${REFERENCIA_REMOTA[$ruta]#refs/heads/}" pull --no-rebase --no-edit --no-autostash --no-recurse-submodules "${firma[@]}" -- "${REMOTO[$ruta]}" "${REFERENCIA_REMOTA[$ruta]}"; fi
+    if [[ ${INTEGRAR_PRODUCCION[$ruta]} == true && ${RAMA[$ruta]} != production ]] && tiene_clave_json "${CABEZAS_REMOTAS[$ruta]}" refs/heads/production; then integrar "$ruta" "${REMOTO[$ruta]}/production" pull --no-rebase --no-edit --no-autostash --no-recurse-submodules "${firma[@]}" -- "${REMOTO[$ruta]}" production; fi
+    if [[ $MODO == syncPR || $MODO == syncPRmerge ]]; then
+        sha_base=$(consultar_sha_rama_github "$ruta" "${BASE[$ruta]}"); asegurar_confirmacion "$ruta" "$sha_base" "${URL_PUBLICACION[$ruta]}"
+        if ! es_ancestro "$ruta" "$sha_base" "$(obtener_sha "$ruta")"; then integrar "$ruta" "base PR ${BASE[$ruta]}" merge --no-edit --no-autostash "${firma[@]}" "$sha_base"; fi
+    fi
+    if [[ $(contenido_modulos "$ruta") != "${CONFIGURACION_MODULOS[$ruta]}" ]]; then
+        descubrir_modulos "$ruta"
+        while IFS= read -r hijo; do capturar_texto ruta_hijo obtener_texto_json "$hijo" repo; identificador=$(obtener_texto_json "$hijo" oid); sincronizar "$ruta_hijo" "$identificador"; done < <(elementos_json "${HIJOS[$ruta]}")
+        confirmar_cambios "$ruta"
+        [[ $(contenido_modulos "$ruta") == "${CONFIGURACION_MODULOS[$ruta]}" ]] || fallar "$ruta" '.gitmodules volvió a cambiar durante la confirmación; revisa los hooks.'
+    fi
+    asociar_rama "$ruta"; comprobar_limpieza "$ruta"; confirmados=$(referencias_modulos "$ruta" true)
+    local cantidad=0
+    while IFS= read -r hijo; do
+        cantidad=$((cantidad + 1)); capturar_texto ruta_hijo obtener_texto_json "$hijo" repo; capturar_texto actual obtener_texto_json "$hijo" path
+        tiene_clave_json "$confirmados" "$actual" || fallar "$ruta" 'Los submódulos cambiaron después de validar el árbol; se detiene el push.'
+        identificador=$(obtener_texto_clave_json "$confirmados" "$actual")
+        [[ $identificador == "$(obtener_sha "$ruta_hijo")" && -n ${PUBLICADOS[$ruta_hijo]+presente} ]] || fallar "$ruta_hijo" 'La referencia cambió después de publicar el hijo; se detiene su padre.'
+        [[ $(obtener_texto_json "${PUBLICADOS[$ruta_hijo]}" 0) == "$identificador" ]] || fallar "$ruta_hijo" 'La referencia cambió después de publicar el hijo; se detiene su padre.'
+        comprobar_limpieza "$ruta_hijo"; verificar_referencia "$ruta_hijo" "$identificador" "$(obtener_json "$hijo" urls)"
+    done < <(elementos_json "${HIJOS[$ruta]}")
+    [[ $(longitud_json "$confirmados") == "$cantidad" ]] || fallar "$ruta" 'Los submódulos cambiaron después de validar el árbol; se detiene el push.'
+    comprobar_antes_de_publicar "$ruta"
+    printf '=> [%s] Publicando %s/%s...\n' "$(rotulo "$ruta")" "${REMOTO_PUBLICACION[$ruta]}" "${RAMA[$ruta]}"
+    remoto_seguimiento=$(valor_configuracion "$ruta" "branch.${RAMA[$ruta]}.remote"); integracion_seguimiento=$(valor_configuracion "$ruta" "branch.${RAMA[$ruta]}.merge")
+    [[ -n $remoto_seguimiento && -n $integracion_seguimiento ]] || seguimiento+=(--set-upstream)
+    esperado=$(obtener_sha "$ruta"); ejecutar_git "$ruta" push --recurse-submodules=check "${seguimiento[@]}" -- "${REMOTO_PUBLICACION[$ruta]}" "HEAD:refs/heads/${RAMA[$ruta]}"
+    actual=$(referencias_remotas "$ruta" "${URL_PUBLICACION[$ruta]}" "refs/heads/${RAMA[$ruta]}")
+    [[ $(obtener_texto_clave_json "$actual" "refs/heads/${RAMA[$ruta]}") == "$esperado" && $(obtener_sha "$ruta") == "$esperado" ]] || fallar "$ruta" 'El HEAD local y la rama publicada no coinciden después del push.'
+    comprobar_limpieza "$ruta"
+    PUBLICADOS[$ruta]=$(agregar_json "$(agregar_json "$(agregar_json '[]' "$(citar_json "$esperado")")" "$(citar_json "${REMOTO_PUBLICACION[$ruta]}")")" "$(citar_json "${RAMA[$ruta]}")")
+    if [[ $MODO == syncPR || $MODO == syncPRmerge ]]; then publicar_pr "$ruta"; fi
+}
+mostrar_resumen() {
+    local ruta identificador remoto rama creados elemento constancia
+    printf '%s\n' "$1"
+    for ruta in "${REPOSITORIOS[@]}"; do
+        [[ -n ${PUBLICADOS[$ruta]+presente} ]] || continue
+        identificador=$(obtener_texto_json "${PUBLICADOS[$ruta]}" 0); remoto=$(obtener_texto_json "${PUBLICADOS[$ruta]}" 1); rama=$(obtener_texto_json "${PUBLICADOS[$ruta]}" 2); creados=
+        while IFS= read -r elemento; do elemento=$(obtener_texto_json "$elemento" ''); creados+="${creados:+, }${elemento:0:12}"; done < <(elementos_json "${CONFIRMACIONES_CREADAS[$ruta]}")
+        printf '  [%s] %s/%s -> %.12s; commits creados: %s\n' "$(rotulo "$ruta")" "$remoto" "$rama" "$identificador" "${creados:-ninguno}"
+        if [[ -n ${SOLICITUDES_CAMBIO[$ruta]+presente} ]]; then printf '    base: %s; issue #%s; PR %s\n' "${BASE[$ruta]}" "${INCIDENCIA[$ruta]}" "$(obtener_texto_json "${SOLICITUDES_CAMBIO[$ruta]}" html_url)"; fi
+    done
+    for ruta in "${REPOSITORIOS[@]}"; do
+        [[ -n ${FUSIONADOS[$ruta]+presente} ]] || continue; constancia=${FUSIONADOS[$ruta]}
+        printf '  [%s] PR #%s fusionado: %s; progreso guardado.\n' "$(rotulo "$ruta")" "$(obtener_texto_json "$constancia" pr)" "$(obtener_texto_json "$constancia" sha)"
+    done
+}
+interpretar_opciones() {
+    local opcion clave valor tipo terminar=false; local -a mensajes=()
+    OPCIONES='{"local_audit":false,"approve":false}'
+    while (($#)); do
+        opcion=$1; shift
+        if [[ $MODO != sync && $terminar == false && $opcion == --*=* ]]; then set -- "${opcion#*=}" "$@"; opcion=${opcion%%=*}; fi
+        if [[ $MODO != sync && $terminar == false && ( $opcion == --help || $opcion == -h ) ]]; then printf '%s\n' "$AYUDA"; exit 0; fi
+        if [[ $MODO == sync || $terminar == true || $opcion != --* ]]; then mensajes+=("$opcion"); continue; fi
+        case "$opcion" in
+            --) terminar=true ;;
+            --local-audit) OPCIONES=$(asignar_clave_json "$OPCIONES" local_audit true) ;;
+            --approve) OPCIONES=$(asignar_clave_json "$OPCIONES" approve true) ;;
+            --issue|--repository|--pr|--record|--run|--output|--provider|--session|--environment|--signing-key|--findings)
+                (($#)) || fallar "$PWD" "$opcion necesita un valor."
+                clave=${opcion#--}; clave=${clave//-/_}; valor=$1; shift
+                if [[ $clave == issue || $clave == pr || $clave == run ]]; then
+                    [[ $valor =~ ^[0-9]+$ ]] || fallar "$PWD" "$opcion necesita un número entero."
+                    while [[ ${#valor} -gt 1 && $valor == 0* ]]; do valor=${valor:1}; done
+                    tipo=$valor
+                else tipo=$(citar_json "$valor"); fi
+                OPCIONES=$(asignar_clave_json "$OPCIONES" "$clave" "$tipo") ;;
+            *) fallar "$PWD" "Opción desconocida: $opcion." ;;
+        esac
+    done
+    MENSAJE="${mensajes[*]}"; MENSAJE=${MENSAJE:-Cambios en la matrix}
+}
+principal() {
+    local dependencia directorio_guion resultado ruta esperado
+    for dependencia in git realpath sha256sum stat mktemp; do command -v "$dependencia" >/dev/null || fallar "$PWD" "Falta la herramienta $dependencia."; done
+    TEMPORALES=$(mktemp -d /tmp/tunning-sync.XXXXXX)
+    directorio_guion=$(cd -- "${BASH_SOURCE[0]%/*}" && pwd -P)
+    # Los módulos solo contienen funciones Bash de esta implementación.
+    source "$directorio_guion/git-json.sh"
+    source "$directorio_guion/git-pr.sh"
+    interpretar_opciones "$@"
+    if [[ $MODO == criteria ]]; then gestionar_criterios; return; fi
+    case "$MODO" in sync|syncPR|syncPRmerge|audit) ;; *) fallar "$PWD" "Modo desconocido: $MODO." ;; esac
+    capturar_git "$PWD" resultado 0 rev-parse --show-toplevel; capturar_texto RAIZ ruta_real "$resultado"
+    if [[ $MODO == audit ]]; then ejecutar_auditoria "$RAIZ"; return; fi
+    printf '%s\n' '=> Validando repositorios y submódulos antes de confirmar cambios...'
+    preparar_repositorio "$RAIZ"; sincronizar "$RAIZ"
+    if [[ $MODO == syncPRmerge ]]; then fusionar_arbol "$RAIZ"; fi
+    local cantidad=0
+    for ruta in "${REPOSITORIOS[@]}"; do
+        [[ -n ${PUBLICADOS[$ruta]+presente} ]] || continue; cantidad=$((cantidad + 1)); esperado=$(obtener_texto_json "${PUBLICADOS[$ruta]}" 0)
+        [[ $(obtener_sha "$ruta") == "$esperado" ]] || fallar "$ruta" 'HEAD cambió después de la publicación.'; comprobar_limpieza "$ruta"
+    done
+    mostrar_resumen "Sincronizados $cantidad repositorios:"
+}
+finalizar() {
+    local estado=$?
+    trap - EXIT
+    [[ $BASHPID == "$PID_SINCRONIZACION" ]] || exit "$estado"
+    if [[ $estado != 0 && ${#PUBLICADOS[@]} -gt 0 ]]; then mostrar_resumen 'Publicaciones completadas antes del error (sincronización incompleta):' || :; fi
+    # Solo se retiran temporales internos de lecturas; los logs/evidencia se conservan.
+    if [[ -n $TEMPORALES && $TEMPORALES == /tmp/tunning-sync.* ]]; then rm -rf -- "$TEMPORALES"; fi
+    exit "$estado"
+}
+trap finalizar EXIT
+trap 'printf "git %s: Interrumpido; los padres pendientes no se publicaron.\n" "$MODO" >&2; exit 130' INT
+trap 'estado=$?; printf "git %s: La operación local falló (código %s); se conserva el trabajo.\n" "$MODO" "$estado" >&2; exit "$estado"' ERR
+principal "$@"
