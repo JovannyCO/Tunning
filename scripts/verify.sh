@@ -88,5 +88,6 @@ while IFS= read -r -d '' archivo; do
             ((ancho>0 && alto>0)) || fallar "${archivo#"$RAIZ/"}: dimensiones PNG inválidas"
             imagenes=$((imagenes+1));;
     esac
-done < <(find "$RAIZ" -type d \( -name .git -o -name .agents -o -name .codex -o -name .aws -o -name node_modules \) -prune -o -type f -print0)
+# El submódulo privado de referencias de marca se comprueba en su repositorio.
+done < <(find "$RAIZ" -type d \( -name .git -o -name .brand -o -name .agents -o -name .codex -o -name .aws -o -name node_modules \) -prune -o -type f -print0)
 printf 'Sintaxis Bash/JSON: %s archivos; enlaces locales: %s; imágenes PNG: %s. OK\n' "$sintaxis" "$enlaces" "$imagenes"

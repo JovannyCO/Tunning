@@ -1,3 +1,7 @@
+[![La terminal bajo revisión: evidencias, faltantes y reconciliación de Ubuntu y WSL2](assets/brand/diagnostico-ubuntu-26-wsl2-jovanny-co-header.png)](#diagnóstico-inicial)
+
+[Leer el diagnóstico →](#diagnóstico-inicial)
+
 # Validación y reconciliación de la terminal actual
 
 Fecha: 2026-10-04.
@@ -123,3 +127,7 @@ No se ejecutó el instalador sobre el entorno real ni una instalación completa 
 5. Probar instalación y reinstalación en una Ubuntu 26 limpia sobre WSL2 y comparar el resultado con la configuración aquí inventariada.
 
 La primera entrega añadió únicamente este diagnóstico. La sección «Código reconciliado» y el README describen las correcciones posteriores y el procedimiento vigente.
+
+[![La evidencia fija el siguiente paso: queda probar la reconstrucción en una WSL limpia](assets/brand/diagnostico-ubuntu-26-wsl2-jovanny-co-footer.png)](#trabajo-necesario-para-dar-la-reconstrucción-por-validada)
+
+[Revisar el trabajo necesario →](#trabajo-necesario-para-dar-la-reconstrucción-por-validada)

@@ -1,8 +1,8 @@
+[![Terminal Tuning: prepara tu terminal y conoce el trabajo de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software](assets/brand/terminal-tuning-portafolio-jovanny-co-header.png)](#de-una-terminal-nueva-a-un-entorno-de-trabajo)
+
 # Terminal Tuning — Reproducible terminal setup for Ubuntu, WSL2, and Google Cloud Shell
 
 [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) · [Comprobaciones locales](docs/USO.md#comprobaciones-y-documentación)
-
-[![Terminal Tuning: tu terminal preparada para retomar el trabajo. Explora el proyecto de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software.](assets/brand/terminal-tuning-jovanny-co-header.png)](#de-una-terminal-nueva-a-un-entorno-de-trabajo)
 
 [Explora el proyecto](#de-una-terminal-nueva-a-un-entorno-de-trabajo) · [Ver cómo trabajo](#jovanny-medina-cifuentes-dos-roles-un-mismo-proyecto)
 
@@ -136,4 +136,4 @@ Si necesitas preparar mejor el entorno de tu equipo, automatizar una tarea o con
 
 [Contacta al desarrollador](mailto:proyectos@Jovanny.CO): conversemos sobre tu próximo proyecto, del análisis al software.
 
-[![Terminal Tuning: tu próximo proyecto, del análisis al software. Contacta a Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software, en proyectos@Jovanny.CO.](assets/brand/terminal-tuning-jovanny-co-footer.png)](mailto:proyectos@Jovanny.CO)
+[![Tu próximo proyecto, del análisis al software: contacta a Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software](assets/brand/terminal-tuning-portafolio-jovanny-co-footer.png)](mailto:proyectos@Jovanny.CO)

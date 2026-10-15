@@ -1,3 +1,7 @@
+[![Presentación en GitHub: identidad, enlaces y metadatos comprobables de Terminal Tuning](../assets/brand/presentacion-github-terminal-tuning-jovanny-co-header.png)](#metadatos-de-github)
+
+[Ver los metadatos →](#metadatos-de-github)
+
 # Presentación y descubrimiento de Terminal Tuning en GitHub
 
 [Volver a la portada](../README.md)
@@ -45,3 +49,7 @@ Referencias oficiales:
 - [Google Search: buenas prácticas para imágenes](https://developers.google.com/search/docs/appearance/google-images).
 
 Los [prompts y los archivos de las imágenes](../assets/README.md) quedan versionados para mantener la presentación.
+
+[![Cierre de presentación: conserva identidad y referencias coherentes con el alcance](../assets/brand/presentacion-github-terminal-tuning-jovanny-co-footer.png)](#alcance-de-la-optimización)
+
+[Revisar el alcance →](#alcance-de-la-optimización)

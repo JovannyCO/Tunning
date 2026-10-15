@@ -1,3 +1,7 @@
+[![Guía de uso: instala tu terminal y conserva preferencias y respaldos](../assets/brand/guia-de-uso-terminal-tuning-jovanny-co-header.png)](#instalar-o-actualizar)
+
+[Ir a la instalación →](#instalar-o-actualizar)
+
 # Guía de Terminal Tuning: instalación, terminal y sincronización Git
 
 [Volver a la portada](../README.md)
@@ -121,13 +125,20 @@ GPG. [scripts/git-json.sh](../scripts/git-json.sh) procesa JSON en Bash y tambi�
 se instala junto al motor. Después de actualizar el checkout, ejecuta
 `bash setup.sh --no-packages` para actualizar las copias instaladas.
 
-1. Descubre todos los submódulos recursivamente y valida las ramas, los remotos, las preferencias y las operaciones pendientes del árbol antes de crear commits. Inicializa los faltantes en los commits registrados, sin usar `--remote` ni mover los checkouts existentes.
+`.brand` y los repositorios cuyo nombre comienza por `__` son dependencias
+siempre de solo lectura para `git sync`, `git syncPR` y `git syncPRmerge`.
+Los alias no los inicializan ni cambian su checkout, rama o configuración;
+tampoco ejecutan commit, merge, fetch, push ni PR en ellos. Procesan el padre
+conservando el SHA ya seleccionado por el usuario, que puede registrarse como
+gitlink. Si se invocan dentro de uno de esos repositorios, se niegan a modificarlo.
+
+1. Descubre los submódulos recursivamente, omite las dependencias de solo lectura y valida las ramas, los remotos, las preferencias y las operaciones pendientes del resto del árbol antes de crear commits. Inicializa los faltantes del resto en los commits registrados, sin usar `--remote` ni mover los checkouts existentes.
 2. Procesa los hijos más profundos primero. Cada repositorio agrega sus archivos y referencias hijas con `git add -A`; si corresponde, crea un commit con formato `usuario@hostname 4octubre12:34 - mensaje`. El mensaje predeterminado es `Cambios en la matrix`; Cloud Shell usa `CSE` como hostname.
 3. Integra mediante merge su rama remota y `production`, si existe y es otra rama, conservando los commits locales. Si un merge cambia los submódulos, vuelve a validar y sincronizar sus referencias antes de continuar.
 4. Ejecuta las comprobaciones locales sobre el resultado que va a publicar. Si fallan, se detiene antes del push de ese repositorio; conserva los cambios para corregirlos y repetir la comprobación.
 5. Comprueba que los commits hijos están disponibles en los remotos registrados y publica únicamente la rama de trabajo, también con [`--recurse-submodules=check`](https://git-scm.com/docs/git-push#Documentation/git-push.txt---recurse-submodulescheckon-demandonlyno). Establece un upstream cuando falta. Después, el padre confirma y publica las referencias de sus hijos ya publicados.
 
-Cada repositorio conserva su rama activa. Para un submódulo con HEAD separado hace falta `submodule.<nombre>.branch` en `.gitmodules` o en la configuración del padre; la configuración local tiene prioridad y `branch=.` usa la rama del padre. Integra los commits separados y los de la rama configurada antes de asociar HEAD a esa rama. Si la configuración es ambigua o las historias no se pueden integrar con seguridad, indica la ruta y se detiene conservando el trabajo.
+Cada repositorio procesado conserva su rama activa. Para un submódulo procesado con HEAD separado hace falta `submodule.<nombre>.branch` en `.gitmodules` o en la configuración del padre; la configuración local tiene prioridad y `branch=.` usa la rama del padre. Integra los commits separados y los de la rama configurada antes de asociar HEAD a esa rama. Si la configuración es ambigua o las historias no se pueden integrar con seguridad, indica la ruta y se detiene conservando el trabajo. Las dependencias de solo lectura quedan excluidas de estos requisitos y operaciones.
 
 Los remotos se eligen con `branch.<rama>.remote`, `branch.<rama>.pushRemote` y `remote.pushDefault`, usando `origin` por defecto. El comando también publica commits pendientes con árbol limpio y ramas nuevas. No publica automáticamente `production` ni integra PR.
 
@@ -224,3 +235,7 @@ ni publicación de estados de pruebas o criterios en GitHub. La
 las demás protecciones remotas.
 
 [VALIDACION-Ubuntu-26-WSL2.md](../VALIDACION-Ubuntu-26-WSL2.md) conserva el diagnóstico inicial y el estado de su reconciliación. [SETUP-Firebase-Ubuntu-26.md](../SETUP-Firebase-Ubuntu-26.md) documenta por separado WSL, Node y Firebase; sus versiones son una referencia histórica.
+
+[![Cierre de la guía de uso: reinstala las copias y comprueba tu configuración](../assets/brand/guia-de-uso-terminal-tuning-jovanny-co-footer.png)](#comprobaciones-y-documentación)
+
+[Revisar las comprobaciones →](#comprobaciones-y-documentación)
