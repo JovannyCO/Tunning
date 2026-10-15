@@ -222,7 +222,7 @@ inventariar_repositorio() {
         [[ -n $nombre_archivo ]] || continue; entrada="$ruta/$nombre_archivo"
         if tiene_clave_json "$confirmados" "$nombre_archivo"; then
             if [[ -n ${MODULOS_LECTURA[$ruta]-} ]] && tiene_clave_json "${MODULOS_LECTURA[$ruta]}" "$nombre_archivo"; then
-                detalle=$(obtener_json "${MODULOS_LECTURA[$ruta]}" "$nombre_archivo")
+                detalle=$(obtener_clave_json "${MODULOS_LECTURA[$ruta]}" "$nombre_archivo")
                 archivos_json=$(asignar_clave_json "$archivos_json" "$nombre_archivo" "$detalle")
                 continue
             fi
@@ -413,6 +413,7 @@ confirmar_cambios() {
     local -a ajustes=() firma=()
     printf '=> [%s] Agregando cambios...\n' "$(rotulo "$ruta")"
     while IFS= read -r hijo; do capturar_texto nombre obtener_texto_json "$hijo" name; ajustes+=(-c "submodule.$nombre.ignore=none"); done < <(elementos_json "${HIJOS[$ruta]}")
+    while IFS= read -r hijo; do capturar_texto nombre obtener_texto_json "$hijo" value.name; ajustes+=(-c "submodule.$nombre.ignore=none"); done < <(entradas_json "${MODULOS_LECTURA[$ruta]}")
     ejecutar_git "$ruta" "${ajustes[@]}" add -A --
     capturar_git "$ruta" cambiado '0 1' diff --cached --quiet --ignore-submodules=none
     if [[ $ESTADO_GIT == 0 ]]; then printf '=> [%s] No hay cambios para crear una confirmación.\n' "$(rotulo "$ruta")"; return; fi
