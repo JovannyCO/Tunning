@@ -567,26 +567,5 @@
       ]
     }
   ],
-  "archive": [
-    {
-      "previous_path": "assets/tunning-jovanny-medina-cifuentes-header.png",
-      "archive_path": "assets/_borrar/tunning-jovanny-medina-cifuentes-header.png",
-      "sha256": "2d06a94cf623be40c25d7c5177c60ce307e91884c85410a3ca88670c01e42960"
-    },
-    {
-      "previous_path": "assets/tunning-jovanny-medina-cifuentes-footer.png",
-      "archive_path": "assets/_borrar/tunning-jovanny-medina-cifuentes-footer.png",
-      "sha256": "111a4b67aa3601fd182882b113d15b7a92890cb684d2d2a6fb42255e5917541b"
-    },
-    {
-      "previous_path": "assets/brand/terminal-tuning-jovanny-co-header.png",
-      "archive_path": "assets/_borrar/brand/terminal-tuning-jovanny-co-header.png",
-      "sha256": "4c04a0495f1d8e8d4c29a459fda669e046d2764ab1a8f577e861071066c9bbfa"
-    },
-    {
-      "previous_path": "assets/brand/terminal-tuning-jovanny-co-footer.png",
-      "archive_path": "assets/_borrar/brand/terminal-tuning-jovanny-co-footer.png",
-      "sha256": "68dd8ef8e67da0f690810161da633fa9f875ec4287efaec36d64aadc8216a874"
-    }
-  ]
+  "archive": []
 }
