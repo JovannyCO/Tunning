@@ -1,8 +1,8 @@
-# Presentación y descubrimiento de Tunning en GitHub
+# Presentación y descubrimiento de Terminal Tuning en GitHub
 
 [Volver a la portada](../README.md)
 
-La portada presenta Tunning como un caso de trabajo de **Jovanny Medina Cifuentes**, con sus dos roles: **Analista de Sistemas** y **Desarrollador de Software**. Cada afirmación sobre el proyecto tiene enlaces al código, a las pruebas o a la guía de uso. El contacto profesional coincide con el publicado en [su perfil de GitHub](https://github.com/JovannyCO).
+La portada presenta Terminal Tuning como un caso de trabajo de **Jovanny Medina Cifuentes**, con sus dos roles: **Analista de Sistemas** y **Desarrollador de Software**. Cada afirmación sobre el proyecto tiene enlaces al código, a las pruebas o a la guía de uso. El contacto profesional coincide con el publicado en [su perfil de GitHub](https://github.com/JovannyCO).
 
 ## Qué se aplica en este repositorio
 
@@ -17,11 +17,15 @@ Los enlaces a archivos e imágenes son relativos para que GitHub los resuelva se
 
 ## Metadatos de GitHub
 
-La descripción y los topics se guardan en GitHub, fuera de los archivos versionados. Esta es la configuración usada para acompañar la portada:
+La descripción y los topics se guardan en GitHub, fuera de los archivos versionados. Esta configuración se aplicó y se comprobó mediante la API de GitHub el 15 de octubre de 2026:
 
-**Descripción:** Tunning: terminal reproducible para Ubuntu, WSL2 y Google Cloud Shell, con Material MD3, git sync recursivo y devup. Caso de trabajo de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software.
+**Descripción:** Terminal Tuning: reproducible shell setup for Ubuntu, WSL2 and Cloud Shell. By Jovanny Medina Cifuentes, Systems Analyst & Software Developer.
 
-**Topics:** `ubuntu`, `wsl2`, `google-cloud-shell`, `bash`, `terminal`, `developer-experience`, `dotfiles`, `material-design-3`, `git`, `git-submodules`, `automation`.
+**Topics (14):** `ubuntu`, `wsl2`, `google-cloud-shell`, `bash`, `terminal`, `developer-experience`, `dotfiles`, `material-design-3`, `git`, `git-submodules`, `automation`, `terminal-setup`, `shell-customization`, `developer-environment`.
+
+El repositorio usa la marca **Terminal Tuning** y el nombre público
+`JovannyCO/terminal-tuning`. La [guía de uso](USO.md#compatibilidad-con-instalaciones-anteriores)
+explica cómo actualizar los remotos y conservar la configuración de usuario.
 
 Si cambia el alcance del proyecto, actualiza tanto estos metadatos como el README. Mantén el nombre profesional, los dos roles y los datos de contacto consistentes; evita repetir palabras clave sin aportar información.
 

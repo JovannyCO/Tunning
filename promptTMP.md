@@ -1,4 +1,4 @@
-# Prompt temporal: comprobar Tunning en Google Cloud Shell
+# Prompt temporal: comprobar Terminal Tuning en Google Cloud Shell
 
 Copia el texto de abajo en tu agente de IA **dentro de Google Cloud Shell**.
 Es una instrucción para el agente, no un script para pegar directamente en Bash.
@@ -8,14 +8,14 @@ también lo tendrá.
 
 ---
 
-Trabaja con Tunning de Jovanny Medina Cifuentes en mi sesión real de Google
+Trabaja con Terminal Tuning de Jovanny Medina Cifuentes en mi sesión real de Google
 Cloud Shell. Prepara mi terminal de forma eficaz, reproducible y estética, y
-comprueba el resultado. Puedes instalar Tunning y sus dependencias necesarias;
+comprueba el resultado. Puedes instalar Terminal Tuning y sus dependencias necesarias;
 conserva mis preferencias, configuración, autenticación y claves existentes.
 
-1. Localiza el checkout de `https://github.com/JovannyCO/Tunning`. Si falta,
+1. Localiza el checkout de `https://github.com/JovannyCO/terminal-tuning`. Si falta,
    clona por HTTPS bajo HOME. Durante la revisión del cambio usa
-   `git clone --branch Ubuntu26 https://github.com/JovannyCO/Tunning.git` en
+   `git clone --branch Ubuntu26 https://github.com/JovannyCO/terminal-tuning.git` en
    un destino libre. Lee `AGENTS.md`, `README.md`, `docs/USO.md` y
    `docs/COMPATIBILIDAD.md`. Revisa el árbol sin descartarlo ni cambiar la rama
    de un checkout con trabajo existente. Comprueba `CLOUD_SHELL`, `uname -m`,
@@ -27,7 +27,7 @@ conserva mis preferencias, configuración, autenticación y claves existentes.
    con `mktemp -d /tmp/tunning-cloud-check-XXXXXX` y ejecuta allí
    `bash setup-cloudshell.sh --no-packages --target-dir RUTA_TEMPORAL`.
    Verifica que hay un solo bloque gestionado y que la inicialización de Google
-   aparece antes de Tunning; no alteres `/google/devshell`.
+   aparece antes de Terminal Tuning; no alteres `/google/devshell`.
 3. Ejecuta `bash scripts/verify.sh`. Si falta una dependencia, identifica
    e instala únicamente la necesaria. Si hay un fallo, resuélvelo antes de
    instalar en mi usuario y registra el cambio; no eludas la comprobación de

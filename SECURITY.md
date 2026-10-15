@@ -9,7 +9,7 @@ El código y la configuración pueden auditarse antes de instalar. Los extras
 de Cloud Shell se descargan de releases oficiales con versiones y SHA256
 fijados en [el instalador](scripts/install-cloudshell-extras.sh). Un hash
 comprueba que el archivo coincide con el revisado; la confianza también depende
-del proveedor y del código de Tunning. Los ejecutables normales ya presentes
+del proveedor y del código de Terminal Tuning. Los ejecutables normales ya presentes
 en `~/.local/bin` se conservan.
 
 La instalación no recupera sesiones ni claves de otros proyectos. `git sync`

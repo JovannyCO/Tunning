@@ -1,4 +1,4 @@
-# Guía de Tunning: instalación, terminal y sincronización Git
+# Guía de Terminal Tuning: instalación, terminal y sincronización Git
 
 [Volver a la portada](../README.md)
 
@@ -9,6 +9,8 @@ Configuración reproducible de los tres componentes de uso diario: **prompt Mate
 En Ubuntu 26.04, con `bash` y `git` disponibles, clona este repo y ejecuta:
 
 ```bash
+git clone https://github.com/JovannyCO/terminal-tuning.git
+cd terminal-tuning
 bash setup.sh
 source ~/.bashrc
 ```
@@ -39,6 +41,37 @@ Cada actualización guarda los archivos reemplazados bajo `~/.local/state/tunnin
 Sin opciones nuevas conserva el prompt y los extras de `settings.sh`; la detección del entorno sigue siendo automática. El instalador lee únicamente preferencias literales conocidas, sin ejecutar ese archivo, y se detiene si contiene una configuración inválida. Las opciones explícitas cambian la selección.
 
 `--target-dir /tmp/tunning-prueba --no-packages` prepara una instalación aislada sin cambiar `HOME`. Sirve para inspeccionar archivos; no activa esa configuración en tu sesión.
+
+### Compatibilidad con instalaciones anteriores
+
+**Terminal Tuning** es el nombre público del proyecto antes llamado **Tunning**.
+La configuración conserva los identificadores históricos `tunning` para que las
+instalaciones anteriores mantengan sus preferencias, respaldos y alias. Siguen
+vigentes `~/.config/tunning`, `~/.local/state/tunning`, las opciones Git
+`tunning.*`, las variables `TUNNING_*` y los marcadores de los bloques gestionados
+en Bash y Git. El estado de sincronización sigue bajo `tunning-sync/` en el
+directorio Git. La reinstalación utiliza esas mismas rutas y ajustes.
+
+Para un checkout existente, comprueba `git remote -v` y actualiza `origin` según
+el transporte que ya utilices. Si tienes SSH configurado:
+
+```bash
+git remote set-url origin git@github.com:JovannyCO/terminal-tuning.git
+git remote -v
+```
+
+Para conservar HTTPS:
+
+```bash
+git remote set-url origin https://github.com/JovannyCO/terminal-tuning.git
+git remote -v
+```
+
+GitHub normalmente redirige la URL anterior tras un renombre. Actualiza también
+los enlaces que mantengas fuera del repositorio. Puedes conservar el nombre de
+la carpeta de tu checkout y seguir usando tu rama actual. Después de actualizar
+sus archivos, ejecuta `bash setup.sh --no-packages` para reinstalar las copias
+de usuario. El renombre conserva identidad, autenticación, firma y preferencias.
 
 ## Apariencia y teclado
 
@@ -141,7 +174,7 @@ de publicar. Los repositorios sin verificador ni esta preferencia continúan
 directamente con el push.
 
 Esta configuración no elige una rama para los submódulos ni certifica las
-comprobaciones de otro proyecto. Si cambias el checkout de Tunning, reinstala la copia
+comprobaciones de otro proyecto. Si cambias el checkout de Terminal Tuning, reinstala la copia
 del motor antes de usar los alias. Los resultados se comprueban en local antes
 de publicar; los modos PR usan GitHub para gestionar issues y PR y consultar sus
 reglas. `git sync` conserva su flujo sin usar la API de GitHub.
@@ -185,7 +218,7 @@ dimensiones de los PNG.
 No analiza la sintaxis TOML ni sustituye una comprobación funcional de Starship.
 Usa Bash, awk y herramientas básicas de Ubuntu, sin ejecutar instaladores
 ni utilizar la red. Ejecuta las comprobaciones en local antes de publicar.
-Tunning mantiene sus comprobaciones en la terminal, sin configuración `.github`
+Terminal Tuning mantiene sus comprobaciones en la terminal, sin configuración `.github`
 ni publicación de estados de pruebas o criterios en GitHub. La
 [guía de PR](GIT-PR.md) explica cómo registrar evidencia local firmada y conservar
 las demás protecciones remotas.

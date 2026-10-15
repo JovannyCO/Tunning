@@ -1,8 +1,18 @@
-# Trabajar en Tunning
+# Trabajar en Terminal Tuning
 
-Tunning prepara una terminal nueva y muestra el trabajo de **Jovanny Medina
+Terminal Tuning prepara una terminal nueva y muestra el trabajo de **Jovanny Medina
 Cifuentes**, **Analista de Sistemas** y **Desarrollador de Software**. Conserva
 ambos propósitos, la atribución MIT y los dos roles al modificar la portada.
+
+Marca: **Jovanny.CO**. Para crear o actualizar imágenes de Markdown, aplica
+`.brand/README.md` y `.brand/marcas/jovanny-co.md`. Para regenerar imágenes,
+inicializa las referencias con `git submodule update --init .brand` usando
+acceso autorizado al repositorio privado `JovannyCO/__Brands`. La instalación
+y las comprobaciones normales del consumidor no requieren esas referencias.
+Limita la aplicación de la marca a las imágenes y documentos solicitados;
+los Markdown existentes conservan su alcance. Excluye submódulos, dependencias
+y archivos generados. Conserva intactos los originales de referencia de `.brand`
+y guarda los nuevos resultados en `assets/brand/`.
 
 ## Antes de cambiar una terminal
 
@@ -33,7 +43,7 @@ bash setup.sh --no-packages --target-dir "$revision_tunning"
 
 Ejecuta y corrige las comprobaciones en local antes de publicar. El verificador
 comprueba sintaxis Bash/JSON, enlaces locales y cabeceras y dimensiones PNG.
-Tunning mantiene las comprobaciones en la terminal, sin configuración `.github`
+Terminal Tuning mantiene las comprobaciones en la terminal, sin configuración `.github`
 ni publicación de estados de pruebas o
 criterios en GitHub.
 
@@ -44,13 +54,13 @@ cambias el instalador. Para comprobar flujos de Git emplea remotos locales tempo
 
 Publica únicamente si forma parte de la petición del usuario. Conserva la rama
 activa, comprueba el árbol y los remotos antes de `git sync`, y asocia los PR
-a su issue cuando proceda. `main` es la principal pública de Tunning; otros
+a su issue cuando proceda. `main` es la principal pública de Terminal Tuning; otros
 proyectos pueden usar `production`. No impongas una rama a los submódulos ni
 fusiones PR automáticamente.
 
 `git sync`, `git syncPR` y `git syncPRmerge` comprueban el resultado local
 antes del push. Para otros proyectos configura sus comprobaciones mediante
-`tunning.testCommands`; no supongas que las comprobaciones de Tunning validan sus
+`tunning.testCommands`; no supongas que las comprobaciones de Terminal Tuning validan sus
 submódulos. La evidencia de criterios y la auditoría independiente se validan
 en local antes de una fusión solicitada: usa el SHA y la base reales,
 informes firmados y hashes de

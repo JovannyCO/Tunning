@@ -1,4 +1,4 @@
-# Contribuir a Tunning
+# Contribuir a Terminal Tuning
 
 Describe el problema, el entorno y el resultado esperado en un issue. Para
 defectos del instalador incluye la versión de Ubuntu o si usas Cloud Shell,
@@ -21,7 +21,7 @@ Ubuntu. Prueba una instalación aislada si cambias el instalador. Para cambios
 visuales, indica qué interfaz revisaste.
 
 Ejecuta las comprobaciones en local, corrige los fallos y publica después de
-pasarlas. Tunning mantiene estas comprobaciones en la terminal, sin
+pasarlas. Terminal Tuning mantiene estas comprobaciones en la terminal, sin
 configuración `.github` ni publicación de estados de pruebas o criterios en
 GitHub. `git sync` y los modos PR comprueban las suites locales antes del push;
 tras cambiar el motor reinstala la copia con `bash setup.sh --no-packages`.

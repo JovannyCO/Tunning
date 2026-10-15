@@ -3,6 +3,7 @@
 set -Eeuo pipefail
 
 DIRECTORIO_REPOSITORIO="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# Conserva los marcadores históricos para reconocer instalaciones anteriores.
 MARCADOR_INICIO='# === TUNNING TERMINAL SETUP - MATERIAL MD3 ==='
 MARCADOR_FIN='## FIN TUNNING TERMINAL SETUP ##'
 directorio_preparacion=''
@@ -217,10 +218,10 @@ preparar_archivo_bashrc() {
             linea_sin_espacios=${linea#"${linea%%[![:space:]]*}"}
             linea_sin_espacios=${linea_sin_espacios%"${linea_sin_espacios##*[![:space:]]}"}
             if [[ $linea_sin_espacios == "$MARCADOR_INICIO" ]]; then
-                [[ $dentro_del_bloque == false ]] || detener_con_error '.bashrc contiene bloques Tunning anidados; corrige los marcadores.'
+                [[ $dentro_del_bloque == false ]] || detener_con_error '.bashrc contiene bloques de Terminal Tuning anidados; corrige los marcadores.'
                 dentro_del_bloque=true
             elif [[ $linea_sin_espacios == "$MARCADOR_FIN" ]]; then
-                [[ $dentro_del_bloque == true ]] || detener_con_error '.bashrc contiene un cierre Tunning sin apertura.'
+                [[ $dentro_del_bloque == true ]] || detener_con_error '.bashrc contiene un cierre de Terminal Tuning sin apertura.'
                 dentro_del_bloque=false
             elif [[ $dentro_del_bloque == false && $linea_sin_espacios != "$arranque_anterior" ]]; then
                 if [[ $perfil == cloudshell && ( $linea_sin_espacios == 'source /google/devshell/bashrc.google' || $linea_sin_espacios == '. /google/devshell/bashrc.google' ) ]]; then continue; fi
@@ -228,7 +229,7 @@ preparar_archivo_bashrc() {
             fi
         done < "$ruta_archivo"
     fi
-    [[ $dentro_del_bloque == false ]] || detener_con_error '.bashrc contiene un bloque Tunning sin cierre; no se ha modificado.'
+    [[ $dentro_del_bloque == false ]] || detener_con_error '.bashrc contiene un bloque de Terminal Tuning sin cierre; no se ha modificado.'
     contenido_ajeno=$(cat -- "$directorio_preparacion/bashrc-contenido_ajeno")
     {
         printf '%s\n\n%s\n' "$contenido_ajeno" "$MARCADOR_INICIO"
