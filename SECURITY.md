@@ -1,3 +1,7 @@
+[![Seguridad de Terminal Tuning: reporta riesgos sin exponer secretos e incluye versión, impacto y reproducción](assets/brand/seguridad-terminal-tuning-jovanny-co-header.png)](mailto:proyectos@Jovanny.CO)
+
+[Escribir por canal privado →](mailto:proyectos@Jovanny.CO)
+
 # Seguridad
 
 Para informar de una vulnerabilidad, escribe a
@@ -16,3 +20,7 @@ La instalación no recupera sesiones ni claves de otros proyectos. `git sync`
 agrega todos los archivos no ignorados y publica en los remotos configurados;
 revisa esos archivos antes de usarlo. La firma no cifra su contenido. Consulta
 [la guía de Git sync](docs/USO.md#git-sync) para sus requisitos y errores.
+
+[![Audita el código y cuida lo que publicas; reporta vulnerabilidades a proyectos@Jovanny.CO sin secretos](assets/brand/seguridad-terminal-tuning-jovanny-co-footer.png)](mailto:proyectos@Jovanny.CO)
+
+[proyectos@Jovanny.CO →](mailto:proyectos@Jovanny.CO)

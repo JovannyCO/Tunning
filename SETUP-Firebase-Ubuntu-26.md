@@ -1,3 +1,7 @@
+[![Firebase en Ubuntu 26: prepara WSL2, el stack y sus emuladores con Jovanny.CO](assets/brand/entorno-firebase-ubuntu-26-jovanny-co-header.png)](#4-instalación-del-stack)
+
+[Instalar el stack →](#4-instalación-del-stack)
+
 # SETUP — Firebase · Ubuntu 26 · WSL2
 > Stack validado: Windows 11 Pro · Dell i7-8650U · 32 GB RAM  
 > Fecha: 2026-05-25 | Claude Code 2.1.150 · Antigravity 2 · Firebase CLI 15.18.0
@@ -232,3 +236,7 @@ claude doctor                         # diagnóstico de instalación
 | Java | OpenJDK 21.0.11-ea |
 | Claude Code | 2.1.150 |
 | Antigravity | 2.0 |
+
+[![Un stack preparado se comprueba: revisa versiones, recursos y emuladores locales](assets/brand/entorno-firebase-ubuntu-26-jovanny-co-footer.png)](#7-verificación-del-entorno)
+
+[Verificar el entorno →](#7-verificación-del-entorno)

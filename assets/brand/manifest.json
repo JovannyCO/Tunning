@@ -1,0 +1,586 @@
+{
+  "schema": 1,
+  "brand": "Jovanny.CO",
+  "source_commit": "b8427372bff2f254727a31c8fcf0056c27e89b15",
+  "canvas": {
+    "width": 1942,
+    "height": 809
+  },
+  "badge": {
+    "source": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+    "width": 64,
+    "height": 64,
+    "gravity": "northeast",
+    "margin_top": 32,
+    "margin_right": 32,
+    "crop_original": false
+  },
+  "references_sha256": {
+    ".brand/assets/brands/jovanny-co/logo-jovanny-co.png": "a53727c55a73f2bbdf2727c57573c3d7b55e1a2cd6e6d0a9bb50eeab4093446e",
+    ".brand/assets/brands/jovanny-co/plantilla-vacia-jovanny-co.png": "ad98d0af2461f118a11aa2efbc78d2fbe613af9232d00051074563e450619ce0",
+    ".brand/assets/brand/identidad-de-marca-jovanny-co-header.png": "7afb50bd67dd15077c95be67218dd0906146241350eabd2a565c71b0c232950c",
+    ".brand/assets/brand/identidad-de-marca-jovanny-co-footer.png": "56a5ec27fd34394c409c77f44559b40dcc786eb0a5fca018b569e0d8391f4c56"
+  },
+  "documents": [
+    {
+      "document": "AGENTS.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/agentes-terminal-tuning-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing.\nAsset type: finished panorama Markdown brand banner, desired final aspect ratio 1942:809.\nCreate the COMPLETE banner including all exact Spanish typeset text, not a template or empty mockup. Reference images are style/composition references only: keep dark Material Design 3, sophisticated stylized 3D software objects, Inter/Roboto typography, white text, palette primary #FF6D00, secondary #00897B, tertiary #02BCF9, background #1C1B1F, panels #2B2930, three refined orange/green/cyan circuit traces. Text on left 60%, themed illustration on right 40%. Flat dark banner with generous margins, no frame. Text must be highly readable at 830px display width, maximum two headline lines. Full author and both roles must be present, roles equally sized, equally weighted, equal visual prominence (one green and one cyan is fine). Do not draw ANY light bulbs, emoji, logos, brand emblem or watermark: the ONE exact original lightbulb PNG will be added later outside the generator. Keep top-right 112x112 px corner absolutely empty dark background, no objects, text, traces. Generate one banner only. Do not invent any extra text.\nPiece: header for AGENTS.md of Terminal Tuning.\nThemed scene: An elegant open technical field manual in dark materials, showing familiar checklist marks, three connected workflow nodes and a small terminal window, no small legible content needed. Theme: a map of operational rules before working in a terminal.\nExact text, include each line ONCE and no other wording:\n1. \"Reglas claras\"\n2. \"para cambiar la terminal\"\n3. \"Conserva identidad y preferencias; verifica en local.\"\n4. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n5. \"Analista de Sistemas\"\n6. \"Desarrollador de Software\"\n7. \"Leer las reglas →\"\nTypography layout: headline lines 1-2 at top left, supporting line 3 beneath, signature line 4 below a short orange divider; role lines 5 and 6 equal size/weight underneath signature. CTA line 7 in orange accent or orange pill at bottom left. Ensure complete full author name and both complete role strings. Professional, restrained, grounded in actual documentation. No light bulbs in the illustration.",
+          "text": [
+            "Reglas claras",
+            "para cambiar la terminal",
+            "Conserva identidad y preferencias; verifica en local.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Leer las reglas →"
+          ],
+          "destination": "#antes-de-cambiar-una-terminal",
+          "sha256": "a659e24f6572f143e105ceb717d9e7a28583c8ebac61c6a926f36e99e0315c5a",
+          "width": 1942,
+          "height": 809,
+          "visualValidation": "Full-size source and final at 830 px inspected; exact text, full author, both equally weighted roles, theme, margins and unique original logo verified",
+          "generation_artifact": "exec-65650020-6dbb-48a2-8e3e-6874808a9532.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/agentes-terminal-tuning-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing.\nAsset type: finished panorama Markdown brand banner, desired final aspect ratio 1942:809.\nCreate the COMPLETE banner including all exact Spanish typeset text, not a template or empty mockup. Reference images are style/composition references only: keep dark Material Design 3, sophisticated stylized 3D software objects, Inter/Roboto typography, white text, palette primary #FF6D00, secondary #00897B, tertiary #02BCF9, background #1C1B1F, panels #2B2930, three refined orange/green/cyan circuit traces. Text on left 60%, themed illustration on right 40%. Flat dark banner with generous margins, no frame. Text must be highly readable at 830px display width, maximum two headline lines. Full author and both roles must be present, roles equally sized, equally weighted, equal visual prominence (one green and one cyan is fine). Do not draw ANY light bulbs, emoji, logos, brand emblem or watermark: the ONE exact original lightbulb PNG will be added later outside the generator. Keep top-right 112x112 px corner absolutely empty dark background, no objects, text, traces. Generate one banner only. Do not invent any extra text.\nPiece: footer for AGENTS.md of Terminal Tuning.\nThemed scene: An elegant dark open technical manual with completed checklist indicators and three connected workflow nodes finishing at a terminal window. Specific conclusion: verify changes locally, preserve user preferences, report actual evidence.\nExact text, include each line ONCE and no other wording:\n1. \"Verifica antes\"\n2. \"de publicar cambios\"\n3. \"Pruebas locales y evidencia del resultado real.\"\n4. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n5. \"Analista de Sistemas\"\n6. \"Desarrollador de Software\"\n7. \"Revisar las comprobaciones →\"\nTypography layout: headline lines 1-2 at top left, supporting line 3 beneath, signature line 4 below a short orange divider; role lines 5 and 6 equal size/weight underneath signature. CTA line 7 in orange accent or orange pill at bottom left. Ensure complete full author name and both complete role strings. Professional, restrained, grounded in actual documentation. No light bulbs in the illustration.",
+          "text": [
+            "Verifica antes",
+            "de publicar cambios",
+            "Pruebas locales y evidencia del resultado real.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Revisar las comprobaciones →"
+          ],
+          "destination": "#verificar-los-cambios",
+          "sha256": "a6319e931c1aad332151497157c1cab074f6555a5267d970c988275342cdb8a2",
+          "width": 1942,
+          "height": 809,
+          "visualValidation": "Full-size source and final at 830 px inspected; exact text, full author, both equally weighted roles, theme, margins and unique original logo verified",
+          "generation_artifact": "exec-a2f99511-e3f9-48a9-8c84-d99379a78c73.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png"
+        }
+      ]
+    },
+    {
+      "document": "CONTRIBUTING.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/contribuir-terminal-tuning-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing.\nAsset type: finished panorama Markdown brand banner, desired final aspect ratio 1942:809.\nCreate the COMPLETE banner including all exact Spanish typeset text, not a template or empty mockup. Reference images are style/composition references only: keep dark Material Design 3, sophisticated stylized 3D software objects, Inter/Roboto typography, white text, palette primary #FF6D00, secondary #00897B, tertiary #02BCF9, background #1C1B1F, panels #2B2930, three refined orange/green/cyan circuit traces. Text on left 60%, themed illustration on right 40%. Flat dark banner with generous margins, no frame. Text must be highly readable at 830px display width, maximum two headline lines. Full author and both roles must be present, roles equally sized, equally weighted, equal visual prominence (one green and one cyan is fine). Do not draw ANY light bulbs, emoji, logos, brand emblem or watermark: the ONE exact original lightbulb PNG will be added later outside the generator. Keep top-right 112x112 px corner absolutely empty dark background, no objects, text, traces. Generate one banner only. Do not invent any extra text.\nPiece: header for CONTRIBUTING.md of Terminal Tuning.\nThemed scene: A polished dark 3D Git branch graph with orange, teal and cyan branching paths, two reviewed code change panels with check marks and a merge request card. No icon suggesting automated merging. Theme: contributing changes through a review.\nExact text, include each line ONCE and no other wording:\n1. \"Propón cambios\"\n2. \"con contexto y pruebas\"\n3. \"Del problema al PR, con resultados verificables.\"\n4. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n5. \"Analista de Sistemas\"\n6. \"Desarrollador de Software\"\n7. \"Describir el problema →\"\nTypography layout: headline lines 1-2 at top left, supporting line 3 beneath, signature line 4 below a short orange divider; role lines 5 and 6 equal size/weight underneath signature. CTA line 7 in orange accent or orange pill at bottom left. Ensure complete full author name and both complete role strings. Professional, restrained, grounded in actual documentation. No light bulbs in the illustration.",
+          "text": [
+            "Propón cambios",
+            "con contexto y pruebas",
+            "Del problema al PR, con resultados verificables.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Describir el problema →"
+          ],
+          "destination": "https://github.com/JovannyCO/terminal-tuning/issues/new",
+          "sha256": "2c971919e4278c5bdd13726e133bff2414617ad4f44299c1267ed788da9b7868",
+          "width": 1942,
+          "height": 809,
+          "visualValidation": "Full-size source and final at 830 px inspected; exact text, full author, both equally weighted roles, theme, margins and unique original logo verified",
+          "generation_artifact": "exec-eeef238e-dab5-4904-addc-207dd8a2be58.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/contribuir-terminal-tuning-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing.\nAsset type: finished panorama Markdown brand banner, desired final aspect ratio 1942:809.\nCreate the COMPLETE banner including all exact Spanish typeset text, not a template or empty mockup. Reference images are style/composition references only: keep dark Material Design 3, sophisticated stylized 3D software objects, Inter/Roboto typography, white text, palette primary #FF6D00, secondary #00897B, tertiary #02BCF9, background #1C1B1F, panels #2B2930, three refined orange/green/cyan circuit traces. Text on left 60%, themed illustration on right 40%. Flat dark banner with generous margins, no frame. Text must be highly readable at 830px display width, maximum two headline lines. Full author and both roles must be present, roles equally sized, equally weighted, equal visual prominence (one green and one cyan is fine). Do not draw ANY light bulbs, emoji, logos, brand emblem or watermark: the ONE exact original lightbulb PNG will be added later outside the generator. Keep top-right 112x112 px corner absolutely empty dark background, no objects, text, traces. Generate one banner only. Do not invent any extra text.\nPiece: footer for CONTRIBUTING.md of Terminal Tuning.\nThemed scene: A polished dark 3D Git branch graph alongside reviewed code change panels, a checklist and small signature stamp. Separate paths remain open for human review. Specific conclusion: PR backed by local checks and independent evidence, no claims of accepted criteria or automatic merges.\nExact text, include each line ONCE and no other wording:\n1. \"Un PR con evidencia\"\n2. \"facilita la revisión\"\n3. \"Conserva identidad, firmas y preferencias.\"\n4. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n5. \"Analista de Sistemas\"\n6. \"Desarrollador de Software\"\n7. \"Consultar la política de PR →\"\nTypography layout: headline lines 1-2 at top left, supporting line 3 beneath, signature line 4 below a short orange divider; role lines 5 and 6 equal size/weight underneath signature. CTA line 7 in orange accent or orange pill at bottom left. Ensure complete full author name and both complete role strings. Professional, restrained, grounded in actual documentation. No light bulbs in the illustration.",
+          "text": [
+            "Un PR con evidencia",
+            "facilita la revisión",
+            "Conserva identidad, firmas y preferencias.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Consultar la política de PR →"
+          ],
+          "destination": "docs/GIT-PR.md",
+          "sha256": "4e96ea31ef49bd132787669f8d67ab359eaddc449d6e459b4cdf5492a9d32e7c",
+          "width": 1942,
+          "height": 809,
+          "visualValidation": "Full-size source and final at 830 px inspected; exact text, full author, both equally weighted roles, theme, margins and unique original logo verified",
+          "generation_artifact": "exec-c16bd589-4854-4b28-aa88-9343decb83ca.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png"
+        }
+      ]
+    },
+    {
+      "document": "README.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/terminal-tuning-portafolio-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing\nAsset type: final professional README banner for Terminal Tuning, in the Jovanny.CO identity.\nInput image: the supplied reference is STYLE AND COMPOSITION only. Create a NEW document-specific scene and all copy together. The small bulb in the reference must NOT be generated or copied.\nCanvas: panoramic landscape 1942 by 809 pixels, opaque. Main text left (roughly x110..1100), polished dimensional illustration right. Broad safe margins; every text line fully visible and readable at 830 px wide.\nVisual identity: dark Material Design 3 rounded planes, subdued depth, Roboto or Inter equivalent; palette orange #FF6D00, teal #00897B, cyan #02BCF9, background #1C1B1F and surfaces #2B2930, light text. Three restrained connecting orange/teal/cyan traces.\nBrand badge technical requirement: reserve the entire TOP RIGHT corner rectangle x1814..1942, y0..128 as clean dark background, without text, objects, traces, logo or icons. A single original PNG bulb will be inserted there later at 64x64 with 32px top/right margins. DO NOT draw any bulb, lamp, logo, emoji or imitation anywhere. No placeholder or frame in that corner.\nAuthor: Jovanny Medina Cifuentes must be prominent. Both roles, Analista de Sistemas and Desarrollador de Software, have identical size and weight, teal/cyan, legible at 830 px. No invented claims, statistics, certifications or watermarks.\nExact English project name: \"Terminal Tuning\", clearly separated as two words. All other copy is Spanish with exact accents.\n\nPrimary request: Present the work of the author through his reproducible terminal setup project. Main title in white and orange, a short benefit below, author and both roles, then orange pill CTA with dark text.\nThematic illustration: a finished elegant 3D terminal console with a visible >_ prompt, a small configuration gear, and a few connected software components. This scene communicates terminal preparation and systems work. No actual software logos. No empty filler cards.\nText (verbatim), these five lines:\n\"Terminal Tuning\"\n\"Tu terminal preparada para retomar el trabajo.\"\n\"Jovanny Medina Cifuentes\"\n\"Analista de Sistemas · Desarrollador de Software\"\n\"Explora el proyecto →\"\n",
+          "references": [
+            ".brand/assets/brand/identidad-de-marca-jovanny-co-header.png"
+          ],
+          "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+          "width": 1942,
+          "height": 809,
+          "destination": "#de-una-terminal-nueva-a-un-entorno-de-trabajo",
+          "alt": "Terminal Tuning: prepara tu terminal y conoce el trabajo de Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software",
+          "generation_artifact": "exec-9e73a7b1-6307-4ed3-b968-5eb8b9e4a7f7.png",
+          "sha256": "5352b9561e2fa4ec086a5c91ca028c96f0091daee1021245ba07b8f6073d43d2",
+          "normalization_and_badge_command": "magick banner-generado.png -resize '1942x809^' -gravity center -extent 1942x809 '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite -strip banner-final.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/terminal-tuning-portafolio-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing\nAsset type: final professional README banner for Terminal Tuning, in the Jovanny.CO identity.\nInput image: the supplied reference is STYLE AND COMPOSITION only. Create a NEW document-specific scene and all copy together. The small bulb in the reference must NOT be generated or copied.\nCanvas: panoramic landscape 1942 by 809 pixels, opaque. Main text left (roughly x110..1100), polished dimensional illustration right. Broad safe margins; every text line fully visible and readable at 830 px wide.\nVisual identity: dark Material Design 3 rounded planes, subdued depth, Roboto or Inter equivalent; palette orange #FF6D00, teal #00897B, cyan #02BCF9, background #1C1B1F and surfaces #2B2930, light text. Three restrained connecting orange/teal/cyan traces.\nBrand badge technical requirement: reserve the entire TOP RIGHT corner rectangle x1814..1942, y0..128 as clean dark background, without text, objects, traces, logo or icons. A single original PNG bulb will be inserted there later at 64x64 with 32px top/right margins. DO NOT draw any bulb, lamp, logo, emoji or imitation anywhere. No placeholder or frame in that corner.\nAuthor: Jovanny Medina Cifuentes must be prominent. Both roles, Analista de Sistemas and Desarrollador de Software, have identical size and weight, teal/cyan, legible at 830 px. No invented claims, statistics, certifications or watermarks.\nExact English project name: \"Terminal Tuning\", clearly separated as two words. All other copy is Spanish with exact accents.\n\nPrimary request: Close the README by inviting a software collaboration with its author. Large closing statement on two lines, author and project, both roles, orange CTA pill with dark text, and clearly readable contact email. Match the companion header's calm, professional visual hierarchy.\nThematic illustration: a finished dimensional software architecture made of connected console/code components, a clear flow from a compact analysis diagram into a terminal window. Same restrained rounded dark surfaces. No actual company logos. No blank filler cards.\nText (verbatim), these six lines:\n\"Tu próximo proyecto,\"\n\"del análisis al software.\"\n\"Terminal Tuning · Jovanny Medina Cifuentes\"\n\"Analista de Sistemas · Desarrollador de Software\"\n\"Contacta al desarrollador →\"\n\"proyectos@Jovanny.CO\"\n",
+          "references": [
+            ".brand/assets/brand/identidad-de-marca-jovanny-co-footer.png"
+          ],
+          "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+          "width": 1942,
+          "height": 809,
+          "destination": "mailto:proyectos@Jovanny.CO",
+          "alt": "Tu próximo proyecto, del análisis al software: contacta a Jovanny Medina Cifuentes, Analista de Sistemas y Desarrollador de Software",
+          "generation_artifact": "exec-4926d485-3c82-4597-ab53-9f899d9b5d2d.png",
+          "sha256": "8b697a48a188b89b1af9205d3490472a711c867c895e8cb608a009c23da546cb",
+          "normalization_and_badge_command": "magick banner-generado.png -resize '1942x809^' -gravity center -extent 1942x809 '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite -strip banner-final.png"
+        }
+      ]
+    },
+    {
+      "document": "SECURITY.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/seguridad-terminal-tuning-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing.\nAsset type: finished panorama Markdown brand banner, desired final aspect ratio 1942:809.\nCreate the COMPLETE banner including all exact Spanish typeset text, not a template or empty mockup. Reference images are style/composition references only: keep dark Material Design 3, sophisticated stylized 3D software objects, Inter/Roboto typography, white text, palette primary #FF6D00, secondary #00897B, tertiary #02BCF9, background #1C1B1F, panels #2B2930, three refined orange/green/cyan circuit traces. Text on left 60%, themed illustration on right 40%. Flat dark banner with generous margins, no frame. Text must be highly readable at 830px display width, maximum two headline lines. Full author and both roles must be present, roles equally sized, equally weighted, equal visual prominence (one green and one cyan is fine). Do not draw ANY light bulbs, emoji, logos, brand emblem or watermark: the ONE exact original lightbulb PNG will be added later outside the generator. Keep top-right 112x112 px corner absolutely empty dark background, no objects, text, traces. Generate one banner only. Do not invent any extra text.\nPiece: header for SECURITY.md of Terminal Tuning.\nThemed scene: A polished dark 3D security shield and a small key beside a confidential report envelope and terminal audit panel, subtle orange, teal and cyan details. Familiar security cues; professional no alarmist red, no promise of perfect security.\nExact text, include each line ONCE and no other wording:\n1. \"Reporta riesgos\"\n2. \"sin exponer secretos\"\n3. \"Describe versión, impacto y reproducción.\"\n4. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n5. \"Analista de Sistemas\"\n6. \"Desarrollador de Software\"\n7. \"Escribir por canal privado →\"\nTypography layout: headline lines 1-2 at top left, supporting line 3 beneath, signature line 4 below a short orange divider; role lines 5 and 6 equal size/weight underneath signature. CTA line 7 in orange accent or orange pill at bottom left. Ensure complete full author name and both complete role strings. Professional, restrained, grounded in actual documentation. No light bulbs in the illustration.",
+          "text": [
+            "Reporta riesgos",
+            "sin exponer secretos",
+            "Describe versión, impacto y reproducción.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Escribir por canal privado →"
+          ],
+          "destination": "mailto:proyectos@Jovanny.CO",
+          "sha256": "50657b2d0093b823e8b5437c2aa3703e6b802296998f581ac7086b0d0f382b11",
+          "width": 1942,
+          "height": 809,
+          "visualValidation": "Full-size source and final at 830 px inspected; exact text, full author, both equally weighted roles, theme, margins and unique original logo verified",
+          "generation_artifact": "exec-c34a91f9-59cf-405c-b043-adeb3f1d07de.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/seguridad-terminal-tuning-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing.\nAsset type: finished panorama Markdown brand banner, desired final aspect ratio 1942:809.\nCreate the COMPLETE banner including all exact Spanish typeset text, not a template or empty mockup. Reference images are style/composition references only: keep dark Material Design 3, sophisticated stylized 3D software objects, Inter/Roboto typography, white text, palette primary #FF6D00, secondary #00897B, tertiary #02BCF9, background #1C1B1F, panels #2B2930, three refined orange/green/cyan circuit traces. Text on left 60%, themed illustration on right 40%. Flat dark banner with generous margins, no frame. Text must be highly readable at 830px display width, maximum two headline lines. Full author and both roles must be present, roles equally sized, equally weighted, equal visual prominence (one green and one cyan is fine). Do not draw ANY light bulbs, emoji, logos, brand emblem or watermark: the ONE exact original lightbulb PNG will be added later outside the generator. Keep top-right 112x112 px corner absolutely empty dark background, no objects, text, traces. Generate one banner only. Do not invent any extra text.\nPiece: footer for SECURITY.md of Terminal Tuning.\nThemed scene: A polished dark 3D shield with small key, audit magnifier over a code panel, and confidential report envelope. Specific conclusion: inspect code and files before publishing; report vulnerabilities without secrets, no guaranteed response deadline.\nExact text, include each line ONCE and no other wording:\n1. \"Audita el código.\"\n2. \"Cuida lo que publicas.\"\n3. \"Reporta vulnerabilidades por correo, sin secretos.\"\n4. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n5. \"Analista de Sistemas\"\n6. \"Desarrollador de Software\"\n7. \"proyectos@Jovanny.CO →\"\nTypography layout: headline lines 1-2 at top left, supporting line 3 beneath, signature line 4 below a short orange divider; role lines 5 and 6 equal size/weight underneath signature. CTA line 7 in orange accent or orange pill at bottom left. Ensure complete full author name and both complete role strings. Professional, restrained, grounded in actual documentation. No light bulbs in the illustration.",
+          "text": [
+            "Audita el código.",
+            "Cuida lo que publicas.",
+            "Reporta vulnerabilidades por correo, sin secretos.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "proyectos@Jovanny.CO →"
+          ],
+          "destination": "mailto:proyectos@Jovanny.CO",
+          "sha256": "046f63acece91a7487541cfe0dbbae2e33bb1be7a5647510d2d14136ceaf70a3",
+          "width": 1942,
+          "height": 809,
+          "visualValidation": "Full-size source and final at 830 px inspected; exact text, full author, both equally weighted roles, theme, margins and unique original logo verified",
+          "generation_artifact": "exec-05c79497-65aa-4c36-98c1-ab4f2c405ee1.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png"
+        }
+      ]
+    },
+    {
+      "document": "SETUP-Firebase-Ubuntu-26.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/entorno-firebase-ubuntu-26-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing. Asset type: complete Spanish Markdown brand banner, landscape ratio 1942:809. Generate a FINISHED banner, all lettering is generated in the image, not an empty template. Input Image 1 is style reference only; DO NOT copy its wording or its bulb. Brand: Jovanny.CO. Design: polished Material Design 3 dark background #1C1B1F and #2B2930, dimensional softly rounded charcoal 3D technical illustration on right, three accent paths orange #FF6D00 teal #00897B cyan #02BCF9, clear white Inter/Roboto equivalent typography left. Desired canvas 1942 x 809 px, wide 2.4005:1 panorama; keep all content at least 80 px from edges. Left 58 percent is readable text and right 42 percent detailed recognizable thematic 3D scene. Main headline large, accurate Spanish accents; support short; full name and BOTH professions in same font size and weight, two separate lines if useful; CTA orange. Reserve upper right exact 96x96 px plus breathing room completely empty dark background so a separate original logo can later be placed. NO lightbulbs, bulbs, emoji, logos, certification seals, watermark, empty cards, empty buttons, or extra unrequested words anywhere. Match reference hierarchy and palette but adapt thematic illustration and exact wording below.\nExact text, verbatim and ONLY these words, with generous clear letterspacing:\n1. \"Firebase en Ubuntu 26\"\n2. \"Prepara WSL2, el stack y sus emuladores.\"\n3. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n4. \"Analista de Sistemas\"\n5. \"Desarrollador de Software\"\n6. \"Instalar el stack →\"\nThematic 3D scene: An assembled 3D developer workbench of connected tools, terminal with meaningful orange code strokes, interlocking system gears, stack modules, and small linked local database cylinders. Purpose: configuring Linux WSL2 development tools and local emulators. Avoid product logos and lock seals.",
+          "text": [
+            "Firebase en Ubuntu 26",
+            "Prepara WSL2, el stack y sus emuladores.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Instalar el stack →"
+          ],
+          "destination": "#4-instalación-del-stack",
+          "sha256": "5dcb0e2edc85a99d525322b7cef289a8aa3dfeee3bbac0540df6c8bcfaa721ac",
+          "width": 1942,
+          "height": 809,
+          "reference": ".brand/assets/brand/identidad-de-marca-jovanny-co-header.png",
+          "visualValidation": "Read at 830 px; exact Spanish copy and both roles; margins intact; unique original logo; no third-party logos or invented validation.",
+          "generation_artifact": "exec-3f83786b-c8b5-40c4-a60e-6614afe4c299.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png",
+          "editPromptColor": "Use case: precise-object-edit. This is a strict minimal color correction of the supplied finished Spanish brand banner. Change ONLY the ink color of these TWO existing profession lines below the author's name on the left: \"Analista de Sistemas\" must be bright teal #35C7AE, and \"Desarrollador de Software\" must be cyan #02BCF9. Preserve their current exact letter shapes, spelling, accents, font size, weight, spacing and position; the two professions must retain equal typographic emphasis. Every other pixel and element should remain as close to the input as possible: all other text in exact original color and wording, heading, subtitle, author, orange CTA, dark background, 3D scene, all code, gears and objects, margins, composition. DO NOT redesign, relayout, add, remove or recolor any other object or text. Keep 1942 x 809 px landscape proportions. Preserve the entirely EMPTY upper-right corner for a separate original logo inserted later. NO logos, no lightbulbs, no emoji, no watermarks. Exact complete wording to preserve verbatim: \"Firebase en Ubuntu 26\" / \"Prepara WSL2, el stack y sus emuladores.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Instalar el stack →\". Again, recolor only the two profession text lines; preserve everything else.",
+          "colorReferenceInput": "marca-entorno-firebase-header-base.png",
+          "previousGeneratedSource": "exec-3f83786b-c8b5-40c4-a60e-6614afe4c299.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/entorno-firebase-ubuntu-26-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing. Asset type: complete Spanish Markdown brand banner, landscape ratio 1942:809. Generate a FINISHED banner, all lettering is generated in the image, not an empty template. Input Image 1 is style reference only; DO NOT copy its wording or its bulb. Brand: Jovanny.CO. Design: polished Material Design 3 dark background #1C1B1F and #2B2930, dimensional softly rounded charcoal 3D technical illustration on right, three accent paths orange #FF6D00 teal #00897B cyan #02BCF9, clear white Inter/Roboto equivalent typography left. Desired canvas 1942 x 809 px, wide 2.4005:1 panorama; keep all content at least 80 px from edges. Left 58 percent is readable text and right 42 percent detailed recognizable thematic 3D scene. Main headline large, accurate Spanish accents; support short; full name and BOTH professions in same font size and weight, two separate lines if useful; CTA orange. Reserve upper right exact 96x96 px plus breathing room completely empty dark background so a separate original logo can later be placed. NO lightbulbs, bulbs, emoji, logos, certification seals, watermark, empty cards, empty buttons, or extra unrequested words anywhere. Match reference hierarchy and palette but adapt thematic illustration and exact wording below.\nExact text, verbatim and ONLY these words, with generous clear letterspacing:\n1. \"Un stack preparado se comprueba.\"\n2. \"Revisa versiones, recursos y emuladores locales.\"\n3. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n4. \"Analista de Sistemas\"\n5. \"Desarrollador de Software\"\n6. \"Verificar el entorno →\"\nThematic 3D scene: Complementary assembled 3D developer workbench with connected stacked tool modules, terminal filled with meaningful colored code strokes, memory/resource dials and connected local database cylinders. Convey the next step of checking a prepared development stack, not an official certification.",
+          "text": [
+            "Un stack preparado se comprueba.",
+            "Revisa versiones, recursos y emuladores locales.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Verificar el entorno →"
+          ],
+          "destination": "#7-verificación-del-entorno",
+          "sha256": "158ca25265db481a6a606c5f96804066ee62d208bf919d29520ae094fcd3ef83",
+          "width": 1942,
+          "height": 809,
+          "editPrompt": "Use case: precise-object-edit. Edit the provided complete Spanish banner. Preserve EVERY existing text character on the left exactly, preserve all typography, left layout, CTA, dark palette, 3D scene lighting, composition, dimensions 1942x809 and EMPTY upper-right 96x96 corner. Change ONLY the vendor logos on the small right-side technical modules. Remove Docker whales, VS Code symbol, Mongo leaf, Redis tile and elephant. Replace every vendor-logo icon with unique GENERIC technical objects: gear, plain terminal prompt >_, memory chip, stacked database cylinders, abstract connected cubes. These are part of a 3D development-stack workbench, complete polished scene, never empty button panels. No animal symbols, no brands, no company logos, no lightbulb or bulb or emoji anywhere. Do not add any text. The result must retain verbatim \"Un stack preparado se comprueba.\" / \"Revisa versiones, recursos y emuladores locales.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Verificar el entorno →\".",
+          "reference": ".brand/assets/brand/identidad-de-marca-jovanny-co-footer.png",
+          "visualValidation": "Read at 830 px; exact Spanish copy and both roles; margins intact; unique original logo; no third-party logos or invented validation.",
+          "generation_artifact": "exec-e5481879-ed12-44d9-b70f-6a8d0c13c9e3.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png",
+          "editPromptColor": "Use case: precise-object-edit. This is a strict minimal color correction of the supplied finished Spanish brand banner. Change ONLY the ink color of these TWO existing profession lines below the author's name on the left: \"Analista de Sistemas\" must be bright teal #35C7AE, and \"Desarrollador de Software\" must be cyan #02BCF9. Preserve their current exact letter shapes, spelling, accents, font size, weight, spacing and position; the two professions must retain equal typographic emphasis. Every other pixel and element should remain as close to the input as possible: all other text in exact original color and wording, heading, subtitle, author, orange CTA, dark background, 3D scene, all code, gears and objects, margins, composition. DO NOT redesign, relayout, add, remove or recolor any other object or text. Keep 1942 x 809 px landscape proportions. Preserve the entirely EMPTY upper-right corner for a separate original logo inserted later. NO logos, no lightbulbs, no emoji, no watermarks. Exact complete wording to preserve verbatim: \"Un stack preparado se comprueba.\" / \"Revisa versiones, recursos y emuladores locales.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Verificar el entorno →\". Again, recolor only the two profession text lines; preserve everything else.",
+          "colorReferenceInput": "marca-entorno-firebase-footer-finalbase.png",
+          "previousGeneratedSource": "exec-e5481879-ed12-44d9-b70f-6a8d0c13c9e3.png"
+        }
+      ]
+    },
+    {
+      "document": "VALIDACION-Ubuntu-26-WSL2.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/diagnostico-ubuntu-26-wsl2-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing. Asset type: complete Spanish Markdown brand banner, landscape ratio 1942:809. Generate a FINISHED banner, all lettering is generated in the image, not an empty template. Input Image 1 is style reference only; DO NOT copy its wording or its bulb. Brand: Jovanny.CO. Design: polished Material Design 3 dark background #1C1B1F and #2B2930, dimensional softly rounded charcoal 3D technical illustration on right, three accent paths orange #FF6D00 teal #00897B cyan #02BCF9, clear white Inter/Roboto equivalent typography left. Desired canvas 1942 x 809 px, wide 2.4005:1 panorama; keep all content at least 80 px from edges. Left 58 percent is readable text and right 42 percent detailed recognizable thematic 3D scene. Main headline large, accurate Spanish accents; support short; full name and BOTH professions in same font size and weight, two separate lines if useful; CTA orange. Reserve upper right exact 96x96 px plus breathing room completely empty dark background so a separate original logo can later be placed. NO lightbulbs, bulbs, emoji, logos, certification seals, watermark, empty cards, empty buttons, or extra unrequested words anywhere. Match reference hierarchy and palette but adapt thematic illustration and exact wording below.\nExact text, verbatim and ONLY these words, with generous clear letterspacing:\n1. \"La terminal, bajo revisión.\"\n2. \"Evidencias, faltantes y reconciliación de Ubuntu/WSL2.\"\n3. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n4. \"Analista de Sistemas\"\n5. \"Desarrollador de Software\"\n6. \"Leer el diagnóstico →\"\nThematic 3D scene: Recognizable 3D audit scene: a clipboard filled with short technical rows and mixed progress indicators, a magnifying lens over meaningful terminal code, and connected configuration gears. Reflect an initial diagnosis with findings and subsequent corrections; avoid all-pass certification symbolism.",
+          "text": [
+            "La terminal, bajo revisión.",
+            "Evidencias, faltantes y reconciliación de Ubuntu/WSL2.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Leer el diagnóstico →"
+          ],
+          "destination": "#diagnóstico-inicial",
+          "sha256": "e4cc86abac46fe143c6e3de102713c156f069452c61e8ccc959218cb40c6553e",
+          "width": 1942,
+          "height": 809,
+          "editPrompt": "Use case: precise-object-edit. Edit the provided complete Spanish banner. Preserve EVERY existing text character on the left exactly, preserve typography, CTA, layout, dark palette, 3D scene lighting, dimensions 1942x809 and EMPTY upper-right 96x96 corner. Change ONLY the two small logo modules at the far right: remove the Ubuntu orange ring logo and Windows blue four-pane logo; replace them with two generic 3D technical elements, one gear and one chip, using orange and cyan accent. No product/company/vendor logos, no lightbulb or bulb or emoji anywhere. Terminal text should be abstract shell code strokes with no vendor logos. Keep clipboard, magnifier and configuration gears. Do not add text or invented certifications. The result must retain verbatim \"La terminal, bajo revisión.\" / \"Evidencias, faltantes y reconciliación de Ubuntu/WSL2.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Leer el diagnóstico →\".",
+          "reference": ".brand/assets/brand/identidad-de-marca-jovanny-co-header.png",
+          "visualValidation": "Read at 830 px; exact Spanish copy and both roles; margins intact; unique original logo; no third-party logos or invented validation.",
+          "generation_artifact": "exec-dfe0c1ec-13c9-4b4f-a352-3c8e01821122.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png",
+          "editPromptColor": "Use case: precise-object-edit. This is a strict minimal color correction of the supplied finished Spanish brand banner. Change ONLY the ink color of these TWO existing profession lines below the author's name on the left: \"Analista de Sistemas\" must be bright teal #35C7AE, and \"Desarrollador de Software\" must be cyan #02BCF9. Preserve their current exact letter shapes, spelling, accents, font size, weight, spacing and position; the two professions must retain equal typographic emphasis. Every other pixel and element should remain as close to the input as possible: all other text in exact original color and wording, heading, subtitle, author, orange CTA, dark background, 3D scene, all code, gears and objects, margins, composition. DO NOT redesign, relayout, add, remove or recolor any other object or text. Keep 1942 x 809 px landscape proportions. Preserve the entirely EMPTY upper-right corner for a separate original logo inserted later. NO logos, no lightbulbs, no emoji, no watermarks. Exact complete wording to preserve verbatim: \"La terminal, bajo revisión.\" / \"Evidencias, faltantes y reconciliación de Ubuntu/WSL2.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Leer el diagnóstico →\". Again, recolor only the two profession text lines; preserve everything else.",
+          "colorReferenceInput": "marca-entorno-diagnostico-header-finalbase.png",
+          "previousGeneratedSource": "exec-dfe0c1ec-13c9-4b4f-a352-3c8e01821122.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/diagnostico-ubuntu-26-wsl2-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing. Asset type: complete Spanish Markdown brand banner, landscape ratio 1942:809. Generate a FINISHED banner, all lettering is generated in the image, not an empty template. Input Image 1 is style reference only; DO NOT copy its wording or its bulb. Brand: Jovanny.CO. Design: polished Material Design 3 dark background #1C1B1F and #2B2930, dimensional softly rounded charcoal 3D technical illustration on right, three accent paths orange #FF6D00 teal #00897B cyan #02BCF9, clear white Inter/Roboto equivalent typography left. Desired canvas 1942 x 809 px, wide 2.4005:1 panorama; keep all content at least 80 px from edges. Left 58 percent is readable text and right 42 percent detailed recognizable thematic 3D scene. Main headline large, accurate Spanish accents; support short; full name and BOTH professions in same font size and weight, two separate lines if useful; CTA orange. Reserve upper right exact 96x96 px plus breathing room completely empty dark background so a separate original logo can later be placed. NO lightbulbs, bulbs, emoji, logos, certification seals, watermark, empty cards, empty buttons, or extra unrequested words anywhere. Match reference hierarchy and palette but adapt thematic illustration and exact wording below.\nExact text, verbatim and ONLY these words, with generous clear letterspacing:\n1. \"La evidencia fija el siguiente paso.\"\n2. \"Queda probar la reconstrucción en una WSL limpia.\"\n3. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n4. \"Analista de Sistemas\"\n5. \"Desarrollador de Software\"\n6. \"Revisar el trabajo necesario →\"\nThematic 3D scene: Complementary 3D audit checklist with a completed analysis document, mixed technical status rows, a small fresh terminal window and connected configuration gears. It indicates a recorded diagnosis and next reconstruction test still pending. Do not imply complete certification or a passing clean-install test.",
+          "text": [
+            "La evidencia fija el siguiente paso.",
+            "Queda probar la reconstrucción en una WSL limpia.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Revisar el trabajo necesario →"
+          ],
+          "destination": "#trabajo-necesario-para-dar-la-reconstrucción-por-validada",
+          "sha256": "4e365a6cf0739b442c4d77bb179a69a94c6f7c67bde9952a96c0ab7dffc6d14f",
+          "width": 1942,
+          "height": 809,
+          "reference": ".brand/assets/brand/identidad-de-marca-jovanny-co-footer.png",
+          "visualValidation": "Read at 830 px; exact Spanish copy and both roles; margins intact; unique original logo; no third-party logos or invented validation.",
+          "generation_artifact": "exec-7a2dceb3-777d-4c29-89b1-0aa31b0f7ad3.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png",
+          "editPromptColor": "Use case: precise-object-edit. This is a strict minimal color correction of the supplied finished Spanish brand banner. Change ONLY the ink color of these TWO existing profession lines below the author's name on the left: \"Analista de Sistemas\" must be bright teal #35C7AE, and \"Desarrollador de Software\" must be cyan #02BCF9. Preserve their current exact letter shapes, spelling, accents, font size, weight, spacing and position; the two professions must retain equal typographic emphasis. Every other pixel and element should remain as close to the input as possible: all other text in exact original color and wording, heading, subtitle, author, orange CTA, dark background, 3D scene, all code, gears and objects, margins, composition. DO NOT redesign, relayout, add, remove or recolor any other object or text. Keep 1942 x 809 px landscape proportions. Preserve the entirely EMPTY upper-right corner for a separate original logo inserted later. NO logos, no lightbulbs, no emoji, no watermarks. Exact complete wording to preserve verbatim: \"La evidencia fija el siguiente paso.\" / \"Queda probar la reconstrucción en una WSL limpia.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Revisar el trabajo necesario →\". Again, recolor only the two profession text lines; preserve everything else.",
+          "colorReferenceInput": "marca-entorno-diagnostico-footer-base.png",
+          "previousGeneratedSource": "exec-7a2dceb3-777d-4c29-89b1-0aa31b0f7ad3.png"
+        }
+      ]
+    },
+    {
+      "document": "assets/README.md",
+      "method": "imagemagick",
+      "template": ".brand/assets/brands/jovanny-co/plantilla-vacia-jovanny-co.png",
+      "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+      "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "font_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/imagenes-terminal-tuning-jovanny-co-header.png",
+          "title": "Imágenes con marca y trazabilidad",
+          "subtitle": "Referencias, composición y archivos para reproducir cada pieza.",
+          "cta": "Revisar los recursos →",
+          "destination": "#imágenes-de-terminal-tuning",
+          "alt": "Imágenes de Terminal Tuning: referencias, composición y trazabilidad de cada pieza",
+          "command": "bash scripts/render-doc-brand.sh 'Imágenes con marca y trazabilidad' 'Referencias, composición y archivos para reproducir cada pieza.' 'Revisar los recursos →' assets/brand/imagenes-terminal-tuning-jovanny-co-header.png",
+          "sha256": "795a6984bc40cbd6eb9fa1396fe46ecae1ff99d110b5e4e3349f0593a240bbd6",
+          "width": 1942,
+          "height": 809
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/imagenes-terminal-tuning-jovanny-co-footer.png",
+          "title": "Cada pieza conserva su origen y propósito",
+          "subtitle": "Método, textos y huellas vinculan los banners con sus documentos.",
+          "cta": "Consultar la reproducción →",
+          "destination": "#reproducir-las-piezas",
+          "alt": "Cierre de imágenes: conserva el método, los textos y las huellas de cada banner",
+          "command": "bash scripts/render-doc-brand.sh 'Cada pieza conserva su origen y propósito' 'Método, textos y huellas vinculan los banners con sus documentos.' 'Consultar la reproducción →' assets/brand/imagenes-terminal-tuning-jovanny-co-footer.png",
+          "sha256": "56f4b5d914ac471c93defbf996ac67b3696824492bc90f9c08c33523e39cafe9",
+          "width": 1942,
+          "height": 809
+        }
+      ]
+    },
+    {
+      "document": "docs/COMPATIBILIDAD.md",
+      "method": "imagemagick",
+      "template": ".brand/assets/brands/jovanny-co/plantilla-vacia-jovanny-co.png",
+      "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+      "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "font_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/compatibilidad-terminal-tuning-jovanny-co-header.png",
+          "title": "Elige el entorno, conoce sus límites",
+          "subtitle": "Ubuntu, WSL2 y Cloud Shell: automatización y pasos del usuario.",
+          "cta": "Comparar los entornos →",
+          "destination": "#compatibilidad-y-límites-de-automatización",
+          "alt": "Compatibilidad: compara la automatización y los límites de cada entorno",
+          "command": "bash scripts/render-doc-brand.sh 'Elige el entorno, conoce sus límites' 'Ubuntu, WSL2 y Cloud Shell: automatización y pasos del usuario.' 'Comparar los entornos →' assets/brand/compatibilidad-terminal-tuning-jovanny-co-header.png",
+          "sha256": "5991378d2b3286434e6a09267dffb6b36b0ce6e8e5aaaa8248596b0f435c6b71",
+          "width": 1942,
+          "height": 809
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/compatibilidad-terminal-tuning-jovanny-co-footer.png",
+          "title": "La interfaz también necesita revisión",
+          "subtitle": "Las pruebas locales no certifican el navegador ni la persistencia real.",
+          "cta": "Validar Cloud Shell →",
+          "destination": "../promptTMP.md",
+          "alt": "Cierre de compatibilidad: valida la interfaz y la persistencia en una sesión real",
+          "command": "bash scripts/render-doc-brand.sh 'La interfaz también necesita revisión' 'Las pruebas locales no certifican el navegador ni la persistencia real.' 'Validar Cloud Shell →' assets/brand/compatibilidad-terminal-tuning-jovanny-co-footer.png",
+          "sha256": "e54e4ac6537d4ae3b5feabcf04f43a5bf71b7f7fe46bafb924fb881dce0e7339",
+          "width": 1942,
+          "height": 809
+        }
+      ]
+    },
+    {
+      "document": "docs/GIT-PR.md",
+      "method": "imagemagick",
+      "template": ".brand/assets/brands/jovanny-co/plantilla-vacia-jovanny-co.png",
+      "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+      "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "font_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/flujo-git-pr-terminal-tuning-jovanny-co-header.png",
+          "title": "Publica con pruebas y revisa la fusión",
+          "subtitle": "Git sync, PR y evidencia local para conservar ramas y firmas.",
+          "cta": "Revisar los criterios →",
+          "destination": "#criterios-con-evidencia",
+          "alt": "Flujo Git y PR: publica con pruebas y revisa criterios antes de la fusión",
+          "command": "bash scripts/render-doc-brand.sh 'Publica con pruebas y revisa la fusión' 'Git sync, PR y evidencia local para conservar ramas y firmas.' 'Revisar los criterios →' assets/brand/flujo-git-pr-terminal-tuning-jovanny-co-header.png",
+          "sha256": "99306cdb645ff6cab8453594e782a1789abbd13614b1ae32984ea06dbd13203f",
+          "width": 1942,
+          "height": 809
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/flujo-git-pr-terminal-tuning-jovanny-co-footer.png",
+          "title": "Cada fusión exige evidencia vigente",
+          "subtitle": "El SHA, la base y la auditoría vinculan pruebas con el cambio.",
+          "cta": "Consultar la auditoría →",
+          "destination": "#política-de-auditoría",
+          "alt": "Cierre del flujo de PR: relaciona el SHA y la base con evidencia y auditoría vigentes",
+          "command": "bash scripts/render-doc-brand.sh 'Cada fusión exige evidencia vigente' 'El SHA, la base y la auditoría vinculan pruebas con el cambio.' 'Consultar la auditoría →' assets/brand/flujo-git-pr-terminal-tuning-jovanny-co-footer.png",
+          "sha256": "998374560aba6aad52f065de85b29db2858f8a8c649ea7b634d83de745335980",
+          "width": 1942,
+          "height": 809
+        }
+      ]
+    },
+    {
+      "document": "docs/GITHUB.md",
+      "method": "imagemagick",
+      "template": ".brand/assets/brands/jovanny-co/plantilla-vacia-jovanny-co.png",
+      "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+      "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "font_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/presentacion-github-terminal-tuning-jovanny-co-header.png",
+          "title": "Presenta el proyecto con evidencia",
+          "subtitle": "Autor, roles, enlaces y metadatos para entender Terminal Tuning.",
+          "cta": "Ver los metadatos →",
+          "destination": "#metadatos-de-github",
+          "alt": "Presentación en GitHub: identidad, enlaces y metadatos comprobables de Terminal Tuning",
+          "command": "bash scripts/render-doc-brand.sh 'Presenta el proyecto con evidencia' 'Autor, roles, enlaces y metadatos para entender Terminal Tuning.' 'Ver los metadatos →' assets/brand/presentacion-github-terminal-tuning-jovanny-co-header.png",
+          "sha256": "0d87b822f012c85a03810f392882c1ea99b9078d668c81fad154e41c7e2a9d09",
+          "width": 1942,
+          "height": 809
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/presentacion-github-terminal-tuning-jovanny-co-footer.png",
+          "title": "La claridad facilita entender el proyecto",
+          "subtitle": "Conserva identidad y referencias cuando cambie su alcance.",
+          "cta": "Revisar el alcance →",
+          "destination": "#alcance-de-la-optimización",
+          "alt": "Cierre de presentación: conserva identidad y referencias coherentes con el alcance",
+          "command": "bash scripts/render-doc-brand.sh 'La claridad facilita entender el proyecto' 'Conserva identidad y referencias cuando cambie su alcance.' 'Revisar el alcance →' assets/brand/presentacion-github-terminal-tuning-jovanny-co-footer.png",
+          "sha256": "eba0435f934f88822fd85886f77553c2351502b95de9730f7fd0f3b05468ad32",
+          "width": 1942,
+          "height": 809
+        }
+      ]
+    },
+    {
+      "document": "docs/USO.md",
+      "method": "imagemagick",
+      "template": ".brand/assets/brands/jovanny-co/plantilla-vacia-jovanny-co.png",
+      "emoji": ".brand/assets/brands/jovanny-co/logo-jovanny-co.png",
+      "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "font_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/guia-de-uso-terminal-tuning-jovanny-co-header.png",
+          "title": "Instala y conserva tu terminal",
+          "subtitle": "Prompt, Git sync y devup, con preferencias y respaldos.",
+          "cta": "Ir a la instalación →",
+          "destination": "#instalar-o-actualizar",
+          "alt": "Guía de uso: instala tu terminal y conserva preferencias y respaldos",
+          "command": "bash scripts/render-doc-brand.sh 'Instala y conserva tu terminal' 'Prompt, Git sync y devup, con preferencias y respaldos.' 'Ir a la instalación →' assets/brand/guia-de-uso-terminal-tuning-jovanny-co-header.png",
+          "sha256": "c9ad4b84e76bffd84c58cfbab41b68494830305f3165dc5ca9e24bc16ecab57e",
+          "width": 1942,
+          "height": 809
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/guia-de-uso-terminal-tuning-jovanny-co-footer.png",
+          "title": "Actualiza sin perder tu configuración",
+          "subtitle": "Reinstala las copias para aplicar los cambios del checkout.",
+          "cta": "Revisar las comprobaciones →",
+          "destination": "#comprobaciones-y-documentación",
+          "alt": "Cierre de la guía de uso: reinstala las copias y comprueba tu configuración",
+          "command": "bash scripts/render-doc-brand.sh 'Actualiza sin perder tu configuración' 'Reinstala las copias para aplicar los cambios del checkout.' 'Revisar las comprobaciones →' assets/brand/guia-de-uso-terminal-tuning-jovanny-co-footer.png",
+          "sha256": "9f54e1c09975697f4c1a40da19aa52ee3c9c14d67b9b087e317e84414a1ce8ac",
+          "width": 1942,
+          "height": 809
+        }
+      ]
+    },
+    {
+      "document": "promptTMP.md",
+      "method": "imagegen",
+      "pieces": [
+        {
+          "kind": "header",
+          "output": "assets/brand/validacion-cloud-shell-jovanny-co-header.png",
+          "prompt": "Use case: ads-marketing. Asset type: complete Spanish Markdown brand banner, landscape ratio 1942:809. Generate a FINISHED banner, all lettering is generated in the image, not an empty template. Input Image 1 is style reference only; DO NOT copy its wording or its bulb. Brand: Jovanny.CO. Design: polished Material Design 3 dark background #1C1B1F and #2B2930, dimensional softly rounded charcoal 3D technical illustration on right, three accent paths orange #FF6D00 teal #00897B cyan #02BCF9, clear white Inter/Roboto equivalent typography left. Desired canvas 1942 x 809 px, wide 2.4005:1 panorama; keep all content at least 80 px from edges. Left 58 percent is readable text and right 42 percent detailed recognizable thematic 3D scene. Main headline large, accurate Spanish accents; support short; full name and BOTH professions in same font size and weight, two separate lines if useful; CTA orange. Reserve upper right exact 96x96 px plus breathing room completely empty dark background so a separate original logo can later be placed. NO lightbulbs, bulbs, emoji, logos, certification seals, watermark, empty cards, empty buttons, or extra unrequested words anywhere. Match reference hierarchy and palette but adapt thematic illustration and exact wording below.\nExact text, verbatim and ONLY these words, with generous clear letterspacing:\n1. \"Comprueba Cloud Shell en su sesión real.\"\n2. \"Instala, conserva preferencias y registra evidencias.\"\n3. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n4. \"Analista de Sistemas\"\n5. \"Desarrollador de Software\"\n6. \"Usar el prompt de validación →\"\nThematic 3D scene: A recognizable 3D dark web terminal console with meaningful orange/teal/cyan shell strokes connected by three accent paths to a cloud shape, a compact configuration gear and a diagnostic clipboard. Cloud is stylized solid 3D charcoal, no Google logos or bulb. This is a validation instruction, not a finished successful certification.",
+          "text": [
+            "Comprueba Cloud Shell en su sesión real.",
+            "Instala, conserva preferencias y registra evidencias.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Usar el prompt de validación →"
+          ],
+          "destination": "#prompt-temporal-comprobar-terminal-tuning-en-google-cloud-shell",
+          "sha256": "644b58adf6c9ecc0b9d6861b878e44faaaad096e91914964b4167fc066b5f27d",
+          "width": 1942,
+          "height": 809,
+          "reference": ".brand/assets/brand/identidad-de-marca-jovanny-co-header.png",
+          "visualValidation": "Read at 830 px; exact Spanish copy and both roles; margins intact; unique original logo; no third-party logos or invented validation.",
+          "generation_artifact": "exec-316b99d8-76fe-4f27-a78d-74c3dd4af207.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png",
+          "editPromptColor": "Use case: precise-object-edit. This is a strict minimal color correction of the supplied finished Spanish brand banner. Change ONLY the ink color of these TWO existing profession lines below the author's name on the left: \"Analista de Sistemas\" must be bright teal #35C7AE, and \"Desarrollador de Software\" must be cyan #02BCF9. Preserve their current exact letter shapes, spelling, accents, font size, weight, spacing and position; the two professions must retain equal typographic emphasis. Every other pixel and element should remain as close to the input as possible: all other text in exact original color and wording, heading, subtitle, author, orange CTA, dark background, 3D scene, all code, gears and objects, margins, composition. DO NOT redesign, relayout, add, remove or recolor any other object or text. Keep 1942 x 809 px landscape proportions. Preserve the entirely EMPTY upper-right corner for a separate original logo inserted later. NO logos, no lightbulbs, no emoji, no watermarks. Exact complete wording to preserve verbatim: \"Comprueba Cloud Shell en su sesión real.\" / \"Instala, conserva preferencias y registra evidencias.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Usar el prompt de validación →\". Again, recolor only the two profession text lines; preserve everything else.",
+          "colorReferenceInput": "marca-entorno-cloud-header-base.png",
+          "previousGeneratedSource": "exec-316b99d8-76fe-4f27-a78d-74c3dd4af207.png"
+        },
+        {
+          "kind": "footer",
+          "output": "assets/brand/validacion-cloud-shell-jovanny-co-footer.png",
+          "prompt": "Use case: ads-marketing. Asset type: complete Spanish Markdown brand banner, landscape ratio 1942:809. Generate a FINISHED banner, all lettering is generated in the image, not an empty template. Input Image 1 is style reference only; DO NOT copy its wording or its bulb. Brand: Jovanny.CO. Design: polished Material Design 3 dark background #1C1B1F and #2B2930, dimensional softly rounded charcoal 3D technical illustration on right, three accent paths orange #FF6D00 teal #00897B cyan #02BCF9, clear white Inter/Roboto equivalent typography left. Desired canvas 1942 x 809 px, wide 2.4005:1 panorama; keep all content at least 80 px from edges. Left 58 percent is readable text and right 42 percent detailed recognizable thematic 3D scene. Main headline large, accurate Spanish accents; support short; full name and BOTH professions in same font size and weight, two separate lines if useful; CTA orange. Reserve upper right exact 96x96 px plus breathing room completely empty dark background so a separate original logo can later be placed. NO lightbulbs, bulbs, emoji, logos, certification seals, watermark, empty cards, empty buttons, or extra unrequested words anywhere. Match reference hierarchy and palette but adapt thematic illustration and exact wording below.\nExact text, verbatim and ONLY these words, with generous clear letterspacing:\n1. \"La prueba real necesita evidencias.\"\n2. \"Registra resultados y pendientes tras reconectar.\"\n3. \"Jovanny.CO · Jovanny Medina Cifuentes\"\n4. \"Analista de Sistemas\"\n5. \"Desarrollador de Software\"\n6. \"Compartir resultados → proyectos@Jovanny.CO\"\nThematic 3D scene: Complementary 3D cloud console and diagnostic record, with meaningful shell lines, report rows and a reconnect loop joining the cloud to a terminal. Communicate documenting checks and pending visual or persistence checks; do not imply real Cloud Shell has already passed. No successful-certification seal.",
+          "text": [
+            "La prueba real necesita evidencias.",
+            "Registra resultados y pendientes tras reconectar.",
+            "Jovanny.CO · Jovanny Medina Cifuentes",
+            "Analista de Sistemas",
+            "Desarrollador de Software",
+            "Compartir resultados → proyectos@Jovanny.CO"
+          ],
+          "destination": "mailto:proyectos@Jovanny.CO",
+          "sha256": "cbd9360934e3e1ab68917f46f70a5958ea2e40204f055d2fcc61b237eac58cee",
+          "width": 1942,
+          "height": 809,
+          "reference": ".brand/assets/brand/identidad-de-marca-jovanny-co-footer.png",
+          "visualValidation": "Read at 830 px; exact Spanish copy and both roles; margins intact; unique original logo; no third-party logos or invented validation.",
+          "generation_artifact": "exec-7bc83fe7-0b77-400d-8a1b-b38b24b194ca.png",
+          "normalization": "Resize uniformly within 1942x809, then center/extend before inserting the original badge; never resize the saved final after insertion.",
+          "original_logo_composite": "magick banner-base.png '(' .brand/assets/brands/jovanny-co/logo-jovanny-co.png -resize 64x64 ')' -gravity northeast -geometry +32+32 -compose over -composite banner-final.png",
+          "editPromptColor": "Use case: precise-object-edit. This is a strict minimal color correction of the supplied finished Spanish brand banner. Change ONLY the ink color of these TWO existing profession lines below the author's name on the left: \"Analista de Sistemas\" must be bright teal #35C7AE, and \"Desarrollador de Software\" must be cyan #02BCF9. Preserve their current exact letter shapes, spelling, accents, font size, weight, spacing and position; the two professions must retain equal typographic emphasis. Every other pixel and element should remain as close to the input as possible: all other text in exact original color and wording, heading, subtitle, author, orange CTA, dark background, 3D scene, all code, gears and objects, margins, composition. DO NOT redesign, relayout, add, remove or recolor any other object or text. Keep 1942 x 809 px landscape proportions. Preserve the entirely EMPTY upper-right corner for a separate original logo inserted later. NO logos, no lightbulbs, no emoji, no watermarks. Exact complete wording to preserve verbatim: \"La prueba real necesita evidencias.\" / \"Registra resultados y pendientes tras reconectar.\" / \"Jovanny.CO · Jovanny Medina Cifuentes\" / \"Analista de Sistemas\" / \"Desarrollador de Software\" / \"Compartir resultados → proyectos@Jovanny.CO\". Again, recolor only the two profession text lines; preserve everything else.",
+          "colorReferenceInput": "marca-entorno-cloud-footer-base.png",
+          "previousGeneratedSource": "exec-7bc83fe7-0b77-400d-8a1b-b38b24b194ca.png"
+        }
+      ]
+    }
+  ],
+  "archive": [
+    {
+      "previous_path": "assets/tunning-jovanny-medina-cifuentes-header.png",
+      "archive_path": "assets/_borrar/tunning-jovanny-medina-cifuentes-header.png",
+      "sha256": "2d06a94cf623be40c25d7c5177c60ce307e91884c85410a3ca88670c01e42960"
+    },
+    {
+      "previous_path": "assets/tunning-jovanny-medina-cifuentes-footer.png",
+      "archive_path": "assets/_borrar/tunning-jovanny-medina-cifuentes-footer.png",
+      "sha256": "111a4b67aa3601fd182882b113d15b7a92890cb684d2d2a6fb42255e5917541b"
+    },
+    {
+      "previous_path": "assets/brand/terminal-tuning-jovanny-co-header.png",
+      "archive_path": "assets/_borrar/brand/terminal-tuning-jovanny-co-header.png",
+      "sha256": "4c04a0495f1d8e8d4c29a459fda669e046d2764ab1a8f577e861071066c9bbfa"
+    },
+    {
+      "previous_path": "assets/brand/terminal-tuning-jovanny-co-footer.png",
+      "archive_path": "assets/_borrar/brand/terminal-tuning-jovanny-co-footer.png",
+      "sha256": "68dd8ef8e67da0f690810161da633fa9f875ec4287efaec36d64aadc8216a874"
+    }
+  ]
+}

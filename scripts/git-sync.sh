@@ -13,6 +13,7 @@ AYUDA='Uso: git sync ["mensaje"]
 Los alias usan Bash y Git. sync publica; syncPR prepara PR;
 syncPRmerge exige evidencia vigente y auditoría independiente para fusionar.
 Valida e inicializa submódulos recursivos en sus commits registrados.
+Exceptúa .brand y repositorios __*: solo registra el SHA elegido, sin modificarlos.
 De hijos a padres: agrega cambios, crea commits, integra mediante merge la rama
 remota y production (si existe), y publica únicamente cada rama de trabajo.
 HEAD separado necesita submodule.<nombre>.branch; branch=. usa la rama padre.
@@ -34,6 +35,7 @@ declare -a REPOSITORIOS=()
 declare -Ag RAMA=() CABEZA_SEPARADA=() FIRMA=() INTEGRAR_PRODUCCION=() REMOTO=()
 declare -Ag REMOTO_PUBLICACION=() REFERENCIA_REMOTA=() URL_PUBLICACION=() CABEZAS_REMOTAS=()
 declare -Ag PUNTA_RAMA=() CONFIGURACION_MODULOS=() HIJOS=() CONFIRMACIONES_CREADAS=()
+declare -Ag MODULOS_LECTURA=()
 declare -Ag RESULTADOS_COMPROBACIONES=() PUBLICADOS=() SOLICITUDES_CAMBIO=() FUSIONADOS=()
 declare -Ag BASE=() SHA_BASE=() BASE_PREDETERMINADA=() METADATOS=()
 declare -Ag RESPONSABLE=() INCIDENCIA=() REPOSITORIO_GITHUB=()
@@ -103,6 +105,19 @@ valor_booleano() {
     if [[ $ESTADO_GIT == 1 || $resultado == true ]]; then printf true; else printf false; fi
 }
 obtener_sha() { local resultado; capturar_git "$1" resultado 0 rev-parse --verify HEAD; printf '%s' "$resultado"; }
+nombre_solo_lectura() {
+    local nombre=${1%%[?#]*}; nombre=${nombre%/}; nombre=${nombre##*/}; nombre=${nombre##*:}; nombre=${nombre%.git}
+    [[ $nombre == .brand || $nombre == __* ]]
+}
+repositorio_solo_lectura() {
+    local ruta=$1 remotos entrada
+    if nombre_solo_lectura "$ruta"; then return 0; fi
+    capturar_git "$ruta" remotos '0 1' config --get-regexp '^remote\..*\.(url|pushurl)$'
+    while IFS= read -r entrada; do
+        if nombre_solo_lectura "${entrada#* }"; then return 0; fi
+    done <<< "$remotos"
+    return 1
+}
 es_ancestro() { local resultado; capturar_git "$1" resultado '0 1' merge-base --is-ancestor "$2" "$3"; [[ $ESTADO_GIT == 0 ]]; }
 referencias_remotas() {
     local ruta=$1 remoto=$2; shift 2
@@ -206,6 +221,11 @@ inventariar_repositorio() {
     while IFS= read -r -d '' nombre_archivo; do
         [[ -n $nombre_archivo ]] || continue; entrada="$ruta/$nombre_archivo"
         if tiene_clave_json "$confirmados" "$nombre_archivo"; then
+            if [[ -n ${MODULOS_LECTURA[$ruta]-} ]] && tiene_clave_json "${MODULOS_LECTURA[$ruta]}" "$nombre_archivo"; then
+                detalle=$(obtener_json "${MODULOS_LECTURA[$ruta]}" "$nombre_archivo")
+                archivos_json=$(asignar_clave_json "$archivos_json" "$nombre_archivo" "$detalle")
+                continue
+            fi
             [[ -e $entrada/.git ]] || fallar "$entrada" 'La auditoría exige un módulo inicializado; no modifica checkouts para prepararlo.'
             detalle=$(inventariar_repositorio "$entrada")
         elif [[ -L $entrada ]]; then
@@ -218,7 +238,28 @@ inventariar_repositorio() {
     if [[ -n $indice ]]; then indice=$(citar_json "$indice"); else indice=null; fi
     objeto_json head "$(citar_json "$(obtener_sha "$ruta")")" index "$indice" files "$archivos_json"
 }
-comprobar_limpieza() { local estado; capturar_git "$1" estado 0 status --porcelain=v1 --untracked-files=all --ignore-submodules=none; [[ -z $estado ]] || fallar "$1" "Quedan cambios después de sincronizar."$'\n'"$estado"; }
+comprobar_limpieza() {
+    local ruta=$1 estado hijo nombre; local -a ajustes=(-c diff.ignoreSubmodules=none)
+    if [[ -n ${HIJOS[$ruta]-} ]]; then
+        while IFS= read -r hijo; do capturar_texto nombre obtener_texto_json "$hijo" name; ajustes+=(-c "submodule.$nombre.ignore=none"); done < <(elementos_json "${HIJOS[$ruta]}")
+    fi
+    if [[ -n ${MODULOS_LECTURA[$ruta]-} ]]; then
+        while IFS= read -r hijo; do capturar_texto nombre obtener_texto_json "$hijo" value.name; ajustes+=(-c "submodule.$nombre.ignore=dirty"); done < <(entradas_json "${MODULOS_LECTURA[$ruta]}")
+    fi
+    capturar_git "$ruta" estado 0 "${ajustes[@]}" status --porcelain=v1 --untracked-files=all
+    [[ -z $estado ]] || fallar "$ruta" "Quedan cambios después de sincronizar."$'\n'"$estado"
+}
+comprobar_modulos_lectura() {
+    local ruta=$1 confirmados=$2 entrada relativa datos identificador directorio
+    while IFS= read -r entrada; do
+        capturar_texto relativa obtener_texto_json "$entrada" key; datos=$(obtener_json "$entrada" value)
+        identificador=$(obtener_texto_json "$datos" oid); capturar_texto directorio obtener_texto_json "$datos" repo
+        [[ $(obtener_texto_clave_json "$confirmados" "$relativa") == "$identificador" ]] || fallar "$ruta" "Cambió el SHA elegido del submódulo de solo lectura: $relativa."
+        if [[ -e $directorio/.git ]]; then
+            [[ $(obtener_sha "$directorio") == "$identificador" ]] || fallar "$ruta" "Cambió el checkout de solo lectura: $relativa."
+        fi
+    done < <(entradas_json "${MODULOS_LECTURA[$ruta]}")
+}
 ruta_externa() {
     local repositorio=$1 nombre_archivo=$2 proposito=$3 ruta comun
     [[ $nombre_archivo != '~' ]] || nombre_archivo=$HOME
@@ -315,12 +356,13 @@ validar_repositorio() {
 }
 preparar_repositorio() {
     local ruta=$1 padre=${2-} nombre=${3-}
+    if repositorio_solo_lectura "$ruta"; then fallar "$ruta" 'Repositorio de solo lectura (.brand o __*); no se sincroniza.'; fi
     if [[ -z ${CONFIRMACIONES_CREADAS[$ruta]+presente} ]]; then REPOSITORIOS+=("$ruta"); CONFIRMACIONES_CREADAS[$ruta]='[]'; fi
     validar_repositorio "$ruta" "$padre" "$nombre"; descubrir_modulos "$ruta"
 }
 descubrir_modulos() {
     local ruta=$1 registrados entradas entrada clave nombre ruta_hijo declarada rama resultado efectiva direcciones direccion hijo identificador relativa nombres='{}' hijos='[]'
-    CONFIGURACION_MODULOS[$ruta]=$(contenido_modulos "$ruta"); registrados=$(referencias_modulos "$ruta")
+    CONFIGURACION_MODULOS[$ruta]=$(contenido_modulos "$ruta"); registrados=$(referencias_modulos "$ruta"); MODULOS_LECTURA[$ruta]='{}'
     if [[ $registrados == '{}' ]]; then HIJOS[$ruta]='[]'; return; fi
     [[ -f $ruta/.gitmodules && ! -L $ruta/.gitmodules ]] || fallar "$ruta" 'Hay gitlinks sin un archivo .gitmodules válido.'
     entradas=$(mktemp "$TEMPORALES/modulos.XXXXXX")
@@ -338,6 +380,14 @@ descubrir_modulos() {
         tiene_clave_json "$nombres" "$relativa" || fallar "$ruta_hijo" 'Falta el registro del submódulo en .gitmodules.'
         capturar_texto nombre obtener_texto_clave_json "$nombres" "$relativa"; capturar_texto declarada valor_configuracion "$ruta" "submodule.$nombre.url" .gitmodules
         [[ -n $declarada ]] || fallar "$ruta_hijo" 'Falta la URL del submódulo en .gitmodules.'
+        capturar_texto efectiva valor_configuracion "$ruta" "submodule.$nombre.url"
+        if nombre_solo_lectura "$relativa" || nombre_solo_lectura "$nombre" || nombre_solo_lectura "$declarada" || nombre_solo_lectura "$efectiva" || { [[ -e $ruta_hijo/.git ]] && repositorio_solo_lectura "$ruta_hijo"; }; then
+            if [[ -e $ruta_hijo/.git ]]; then identificador=$(obtener_sha "$ruta_hijo"); fi
+            hijo=$(objeto_json name "$(citar_json "$nombre")" repo "$(citar_json "$ruta_hijo")" oid "$(citar_json "$identificador")")
+            MODULOS_LECTURA[$ruta]=$(asignar_clave_json "${MODULOS_LECTURA[$ruta]}" "$relativa" "$hijo")
+            printf '=> [%s] Solo lectura; se conserva el SHA %.12s.\n' "$(rotulo "$ruta_hijo")" "$identificador"
+            continue
+        fi
         if [[ ! -e $ruta_hijo/.git ]]; then
             rama=$(rama_configurada "$ruta" "$nombre" "$ruta_hijo")
             [[ -n $rama ]] || fallar "$ruta_hijo" 'Submódulo sin inicializar y sin rama configurada para resolver HEAD separado.'
@@ -446,7 +496,8 @@ sincronizar() {
         [[ $(contenido_modulos "$ruta") == "${CONFIGURACION_MODULOS[$ruta]}" ]] || fallar "$ruta" '.gitmodules volvió a cambiar durante la confirmación; revisa los hooks.'
     fi
     asociar_rama "$ruta"; comprobar_limpieza "$ruta"; confirmados=$(referencias_modulos "$ruta" true)
-    local cantidad=0
+    comprobar_modulos_lectura "$ruta" "$confirmados"
+    local cantidad; cantidad=$(longitud_json "${MODULOS_LECTURA[$ruta]}")
     while IFS= read -r hijo; do
         cantidad=$((cantidad + 1)); capturar_texto ruta_hijo obtener_texto_json "$hijo" repo; capturar_texto actual obtener_texto_json "$hijo" path
         tiene_clave_json "$confirmados" "$actual" || fallar "$ruta" 'Los submódulos cambiaron después de validar el árbol; se detiene el push.'

@@ -1,3 +1,7 @@
+[![Compatibilidad: compara la automatización y los límites de cada entorno](../assets/brand/compatibilidad-terminal-tuning-jovanny-co-header.png)](#compatibilidad-y-límites-de-automatización)
+
+[Comparar los entornos →](#compatibilidad-y-límites-de-automatización)
+
 # Compatibilidad y límites de automatización
 
 [Volver a la portada](../README.md) · [Guía de uso](USO.md)
@@ -56,3 +60,7 @@ repositorio: `main` para la principal pública de Terminal Tuning y `production`
 sea la principal privada configurada por su propietario. `git syncPR` prepara
 PR y `git syncPRmerge` exige pruebas locales, criterios y auditoría independiente
 para fusionarlos. Consulta [Git sync](USO.md#git-sync).
+
+[![Cierre de compatibilidad: valida la interfaz y la persistencia en una sesión real](../assets/brand/compatibilidad-terminal-tuning-jovanny-co-footer.png)](../promptTMP.md)
+
+[Validar Cloud Shell →](../promptTMP.md)

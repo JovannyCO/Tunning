@@ -1,3 +1,7 @@
+[![Flujo Git y PR: publica con pruebas y revisa criterios antes de la fusión](../assets/brand/flujo-git-pr-terminal-tuning-jovanny-co-header.png)](#criterios-con-evidencia)
+
+[Revisar los criterios →](#criterios-con-evidencia)
+
 # Git sync, PR y fusión revisada
 
 [Guía de terminal](USO.md#git-sync)
@@ -206,3 +210,7 @@ merge y se bloquean los ancestros; una fusión ya completada no se revierte.
 Solo GitHub cierra los issues vinculados a PR efectivamente fusionados en su
 rama predeterminada. El resumen diferencia publicaciones y fusiones completas
 de una ejecución detenida.
+
+[![Cierre del flujo de PR: relaciona el SHA y la base con evidencia y auditoría vigentes](../assets/brand/flujo-git-pr-terminal-tuning-jovanny-co-footer.png)](#política-de-auditoría)
+
+[Consultar la auditoría →](#política-de-auditoría)

@@ -1,3 +1,7 @@
+[![Contribuir a Terminal Tuning: propone cambios con contexto, pruebas y resultados verificables](assets/brand/contribuir-terminal-tuning-jovanny-co-header.png)](https://github.com/JovannyCO/terminal-tuning/issues/new)
+
+[Describir el problema →](https://github.com/JovannyCO/terminal-tuning/issues/new)
+
 # Contribuir a Terminal Tuning
 
 Describe el problema, el entorno y el resultado esperado en un issue. Para
@@ -34,3 +38,7 @@ aplicándose; el motor no usa excepciones de administrador para fusionar.
 
 Tus contribuciones se distribuyen bajo [MIT](LICENSE), conservando los avisos
 de autor y licencia. Las herramientas externas mantienen sus propias licencias.
+
+[![Un PR con evidencia facilita la revisión y conserva identidad, firmas y preferencias](assets/brand/contribuir-terminal-tuning-jovanny-co-footer.png)](docs/GIT-PR.md)
+
+[Consultar la política de PR →](docs/GIT-PR.md)

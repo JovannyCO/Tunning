@@ -1,3 +1,7 @@
+[![Comprueba Cloud Shell en su sesión real: instala, conserva preferencias y registra evidencias](assets/brand/validacion-cloud-shell-jovanny-co-header.png)](#prompt-temporal-comprobar-terminal-tuning-en-google-cloud-shell)
+
+[Usar el prompt de validación →](#prompt-temporal-comprobar-terminal-tuning-en-google-cloud-shell)
+
 # Prompt temporal: comprobar Terminal Tuning en Google Cloud Shell
 
 Copia el texto de abajo en tu agente de IA **dentro de Google Cloud Shell**.
@@ -68,3 +72,7 @@ conserva mis preferencias, configuración, autenticación y claves existentes.
 La terminal es el objetivo operativo. La portada pública debe conservar el
 nombre Jovanny Medina Cifuentes y sus dos roles, Analista de Sistemas y
 Desarrollador de Software. No atribuyas capacidades que las pruebas no demuestren.
+
+[![La prueba real necesita evidencias: registra resultados y pendientes tras reconectar y compártelos con Jovanny.CO](assets/brand/validacion-cloud-shell-jovanny-co-footer.png)](mailto:proyectos@Jovanny.CO)
+
+[Compartir resultados → proyectos@Jovanny.CO](mailto:proyectos@Jovanny.CO)
