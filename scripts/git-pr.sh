@@ -149,19 +149,8 @@ ejecucion_exitosa() {
     [[ ${observado%%@*} == "$flujo" ]] || fallar "$ruta" 'La ejecución pertenece a otro flujo de comprobación.'
 }
 
-auditoria_criterios() {
-    local ruta=$1 solicitud=$2 numero=$3 filas=$4 auditoria informe
-    comprobar_limpieza "$ruta"
-    [[ $(obtener_sha "$ruta") == "$(obtener_texto_json "$solicitud" head.sha)" ]] || fallar "$ruta" 'El checkout no corresponde al SHA vigente del PR.'
-    INCIDENCIA[$ruta]=$numero
-    auditoria=$(validar_auditoria "$ruta" "$solicitud" "$(politica_auditoria "$ruta")")
-    informe=$(obtener_json "$auditoria" report)
-    [[ $(obtener_texto_json "$informe" criteria_sha256) == "$(huella_criterios "$filas")" ]] || fallar "$ruta" 'La auditoría no cubre los criterios vigentes del issue.'
-    printf '%s' "$auditoria"
-}
-
 comprobar_criterios() {
-    local ruta=$1 solicitud=$2 numero=$3 flujo=${4:-.github/workflows/tests.yml} incidencia filas fila evidencia clave entradas entrada fuente auditoria
+    local ruta=$1 solicitud=$2 numero=$3 flujo=${4:-.github/workflows/tests.yml} incidencia filas fila evidencia clave entradas entrada fuente
     incidencia=$(api_github "$ruta" "issues/$numero"); filas=$(extraer_criterios "$(obtener_texto_json "$incidencia" body)" "$ruta")
     while IFS= read -r fila; do [[ $(obtener_texto_json "$fila" 1) == true ]] || fallar "$ruta" "Issue #$numero: criterios pendientes: $(obtener_texto_json "$fila" 0)."; done < <(elementos_json "$filas")
     evidencia=$(extraer_evidencia "$(obtener_texto_json "$incidencia" body)" "$ruta")
@@ -170,19 +159,14 @@ comprobar_criterios() {
     entradas=$(obtener_json "$evidencia" criteria)
     validar_detalles_criterios "$entradas" "$filas" || fallar "$ruta" 'La evidencia no cubre exactamente todos los criterios con explicaciones.'
     fuente=$(obtener_texto_json "$evidencia" source)
-    [[ -z $fuente || $fuente == local-audit ]] || fallar "$ruta" 'Fuente de evidencia desconocida.'
-    while IFS= read -r entrada; do
-        if [[ $fuente == local-audit ]]; then
-            [[ $(obtener_texto_json "$entrada" audit_report_sha256) == "$(obtener_texto_json "$evidencia" audit.report_sha256)" ]] || fallar "$ruta" 'La evidencia no corresponde al informe local registrado.'
-        else
+    [[ -z $fuente || $fuente == terminal ]] || fallar "$ruta" 'Fuente de evidencia desconocida.'
+    if [[ $fuente == terminal ]]; then
+        [[ $(tipo_json "$evidencia" local_tests) == array ]] || fallar "$ruta" 'La evidencia de terminal no registra las comprobaciones locales.'
+    else
+        while IFS= read -r entrada; do
             [[ $(tipo_json "$entrada" run) == number && $(obtener_texto_json "$entrada" run) =~ ^[0-9]+$ ]] || fallar "$ruta" 'Falta una ejecución válida en la evidencia.'
             ejecucion_exitosa "$ruta" "$(obtener_texto_json "$entrada" run)" "$(obtener_texto_json "$solicitud" head.sha)" "$flujo"
-        fi
-    done < <(elementos_json "$entradas")
-    if [[ $fuente == local-audit ]]; then
-        auditoria=$(auditoria_criterios "$ruta" "$solicitud" "$numero" "$filas")
-        esperado=$(objeto_json fingerprint "$(obtener_json "$auditoria" fingerprint)" report_sha256 "$(obtener_json "$auditoria" report_sha256)")
-        json_iguales "$(obtener_json "$evidencia" audit)" "$esperado" || fallar "$ruta" 'La evidencia no corresponde a la auditoría local firmada vigente.'
+        done < <(elementos_json "$entradas")
     fi
     printf '%s' "$evidencia"
 }
@@ -203,39 +187,31 @@ actualizar_cuerpo_criterios() {
 }
 
 gestionar_criterios() {
-    local ruta=$PWD repositorio numero solicitud incidencia registro ejecucion auditoria_local filas entradas evidencia auditoria entrada nuevas='[]' cuerpo fresca resultado
+    local ruta=$PWD repositorio numero solicitud incidencia registro ejecucion filas entradas evidencia entrada nuevas='[]' cuerpo resultado
     repositorio=$(obtener_texto_json "$OPCIONES" repository); numero=$(obtener_texto_json "$OPCIONES" pr)
     [[ -n $repositorio && $numero =~ ^[1-9][0-9]*$ ]] || fallar "$ruta" 'Usa --repository owner/repo --pr N.'
     REPOSITORIO_GITHUB[$ruta]=$repositorio
     solicitud=$(api_github "$ruta" "pulls/$numero"); incidencia=$(incidencia_del_pr "$ruta" "$solicitud"); INCIDENCIA[$ruta]=$incidencia
-    capturar_texto registro obtener_texto_json "$OPCIONES" record; ejecucion=$(obtener_texto_json "$OPCIONES" run); auditoria_local=$(obtener_texto_json "$OPCIONES" local_audit)
+    capturar_texto registro obtener_texto_json "$OPCIONES" record; ejecucion=$(obtener_texto_json "$OPCIONES" run)
     if [[ -n $registro ]]; then
-        if [[ $auditoria_local == true ]]; then [[ -z $ejecucion ]] || fallar "$ruta" '--record necesita --local-audit o --run, exclusivamente.'
-        else [[ -n $ejecucion ]] || fallar "$ruta" '--record necesita --local-audit o --run, exclusivamente.'; ejecucion_exitosa "$ruta" "$ejecucion" "$(obtener_texto_json "$solicitud" head.sha)" .github/workflows/tests.yml; fi
+        if [[ -n $ejecucion ]]; then ejecucion_exitosa "$ruta" "$ejecucion" "$(obtener_texto_json "$solicitud" head.sha)" .github/workflows/tests.yml; fi
         resultado=$(api_github "$ruta" "issues/$incidencia"); cuerpo=$(obtener_texto_json "$resultado" body); filas=$(extraer_criterios "$cuerpo" "$ruta")
         [[ -f $registro ]] || fallar "$ruta" 'No existe el archivo de detalles de criterios.'
         entradas=$(leer_documento_json "$registro"); validar_detalles_criterios "$entradas" "$filas" || fallar "$ruta" '--record exige una explicación verificable para cada criterio.'
         evidencia=$(objeto_json schema 1 repository "$(citar_json "$repositorio")" sha "$(obtener_json "$solicitud" head.sha)" base_sha "$(obtener_json "$solicitud" base.sha)" criteria_sha256 "$(citar_json "$(huella_criterios "$filas")")")
-        if [[ $auditoria_local == true ]]; then
-            auditoria=$(auditoria_criterios "$ruta" "$solicitud" "$incidencia" "$filas")
-            evidencia=$(asignar_clave_json "$evidencia" source '"local-audit"')
-            evidencia=$(asignar_clave_json "$evidencia" audit "$(objeto_json fingerprint "$(obtener_json "$auditoria" fingerprint)" report_sha256 "$(obtener_json "$auditoria" report_sha256)")")
+        if [[ -z $ejecucion ]]; then
+            evidencia=$(asignar_clave_json "$evidencia" source '"terminal"')
+            evidencia=$(asignar_clave_json "$evidencia" local_tests '[]')
         fi
         while IFS= read -r entrada; do
-            if [[ $auditoria_local == true ]]; then entrada=$(asignar_clave_json "$entrada" audit_report_sha256 "$(obtener_json "$auditoria" report_sha256)")
-            else entrada=$(asignar_clave_json "$entrada" run "$ejecucion"); fi
+            [[ -z $ejecucion ]] || entrada=$(asignar_clave_json "$entrada" run "$ejecucion")
             nuevas=$(agregar_json "$nuevas" "$entrada")
         done < <(elementos_json "$entradas")
         evidencia=$(asignar_clave_json "$evidencia" criteria "$nuevas")
         cuerpo=$(actualizar_cuerpo_criterios "$cuerpo" "$evidencia")
         api_github "$ruta" "issues/$incidencia" PATCH "$(objeto_json body "$(citar_json "$cuerpo")")" >/dev/null
     fi
-    evidencia=$(comprobar_criterios "$ruta" "$solicitud" "$incidencia")
-    if [[ $auditoria_local == true ]]; then
-        [[ $(obtener_texto_json "$evidencia" source) == local-audit ]] || fallar "$ruta" '--local-audit exige evidencia de una auditoría local firmada.'
-        fresca=$(api_github "$ruta" "pulls/$numero")
-        [[ $(obtener_texto_json "$fresca" head.sha) == "$(obtener_texto_json "$solicitud" head.sha)" && $(obtener_texto_json "$fresca" base.sha) == "$(obtener_texto_json "$solicitud" base.sha)" ]] || fallar "$ruta" 'El PR cambió durante la validación; repite la evidencia local.'
-    fi
+    comprobar_criterios "$ruta" "$solicitud" "$incidencia" >/dev/null
     printf 'Criterios y evidencia OK: %s PR #%s, issue #%s, %s.\n' "$repositorio" "$numero" "$incidencia" "$(obtener_texto_json "$solicitud" head.sha)"
 }
 
@@ -268,7 +244,8 @@ preparar_pr() {
 }
 
 publicar_pr() {
-    local ruta=$1 identificador comparacion consulta existentes existente='' numero marca coincidencias='[]' incidencia detalle elemento hijo ruta_hija solicitud_hija hijos='[]' bloque cuerpo inicio fin estado implementador clave
+    local ruta=$1 identificador comparacion consulta existentes existente='' numero marca coincidencias='[]' incidencia detalle elemento hijo ruta_hija solicitud_hija hijos='[]' bloque cuerpo inicio fin estado clave borrador=true
+    [[ $MODO != syncPRmerge ]] || borrador=false
     identificador=$(obtener_sha "$ruta"); SHA_BASE[$ruta]=$(consultar_sha_rama_github "$ruta" "${BASE[$ruta]}")
     comparacion=$(api_github "$ruta" "compare/$(codificar_url "${SHA_BASE[$ruta]}")...$(codificar_url "$identificador")")
     if [[ $(obtener_texto_json "$comparacion" ahead_by) == 0 || $(obtener_json "$comparacion" files '[]') == '[]' ]]; then printf '=> [%s] Sin diferencias con %s; no se crea PR.\n' "$(rotulo "$ruta")" "${BASE[$ruta]}"; return; fi
@@ -306,7 +283,7 @@ publicar_pr() {
     bloque=$'<!-- tunning-sync:start -->\n'"Rama \`${RAMA[$ruta]}\` → \`${BASE[$ruta]}\`; SHA \`$identificador\`."$'\n\n'
     [[ -n $existente ]] || bloque+="Closes #$numero"$'\n\n'
     bloque+='Dependencias hijas: '; if [[ $hijos == '[]' ]]; then bloque+='ninguna'; else bloque+=$hijos; fi
-    bloque+=$'\n\nLas comprobaciones locales, los criterios y la auditoría deben corresponder a este SHA y base.\n<!-- tunning-sync:end -->'
+    bloque+=$'\n\nLas comprobaciones locales y los criterios deben corresponder a este SHA y base.\n<!-- tunning-sync:end -->'
     if [[ -n $existente ]]; then
         cuerpo=$(obtener_texto_json "$existente" body); inicio='<!-- tunning-sync:start -->'; fin='<!-- tunning-sync:end -->'
         while [[ $cuerpo == *"$inicio"* ]]; do
@@ -318,132 +295,43 @@ publicar_pr() {
         cuerpo+=$'\n\n'"$bloque"
         elemento=$(api_github "$ruta" "pulls/$(obtener_texto_json "$existente" number)" PATCH "$(objeto_json body "$(citar_json "$cuerpo")")")
     else
-        detalle=$(objeto_json head "$(citar_json "${RAMA[$ruta]}")" base "$(citar_json "${BASE[$ruta]}")" title "$(citar_json "Sincronizar ${RAMA[$ruta]}")" body "$(citar_json "$bloque")" draft true)
+        detalle=$(objeto_json head "$(citar_json "${RAMA[$ruta]}")" base "$(citar_json "${BASE[$ruta]}")" title "$(citar_json "Sincronizar ${RAMA[$ruta]}")" body "$(citar_json "$bloque")" draft "$borrador")
         elemento=$(api_github "$ruta" pulls POST "$detalle")
     fi
     api_github "$ruta" "issues/$(obtener_texto_json "$elemento" number)/assignees" POST "$(objeto_json assignees "$(agregar_json '[]' "$(citar_json "${RESPONSABLE[$ruta]}")")")" >/dev/null
     SOLICITUDES_CAMBIO[$ruta]=$elemento
     estado=$(leer_estado "$ruta")
-    implementador=$(objeto_json provider "$(citar_json "$(valor_configuracion "$ruta" tunning.implementerProvider)")" session "$(citar_json "$(valor_configuracion "$ruta" tunning.implementerSession)")" identity "$(citar_json "$(git -C "$ruta" log -1 '--format=%an <%ae>')")")
-    for clave in schema path repository branch base sha base_sha issue pr children responsible implementer; do
+    for clave in schema path repository branch base sha base_sha issue pr children responsible; do
         case $clave in
             schema) detalle=1 ;; path) detalle=$(citar_json "$ruta") ;; repository) detalle=$(citar_json "${REPOSITORIO_GITHUB[$ruta]}") ;;
             branch) detalle=$(citar_json "${RAMA[$ruta]}") ;; base) detalle=$(citar_json "${BASE[$ruta]}") ;;
             sha) detalle=$(citar_json "$identificador") ;; base_sha) detalle=$(citar_json "${SHA_BASE[$ruta]}") ;;
             issue) detalle=$numero ;; pr) detalle=$(obtener_json "$elemento" number) ;; children) detalle=$hijos ;;
-            responsible) detalle=$(citar_json "${RESPONSABLE[$ruta]}") ;; implementer) detalle=$implementador ;;
+            responsible) detalle=$(citar_json "${RESPONSABLE[$ruta]}") ;;
         esac
         estado=$(asignar_clave_json "$estado" "$clave" "$detalle")
     done
     if [[ ${RESULTADOS_COMPROBACIONES[$ruta]-[]} != '[]' ]]; then estado=$(asignar_clave_json "$estado" local_tests "$(objeto_json sha "$(citar_json "$identificador")" results "${RESULTADOS_COMPROBACIONES[$ruta]}")"); fi
-    estado=$(quitar_clave_json "$estado" audit); guardar_estado "$ruta" "$estado"
+    guardar_estado "$ruta" "$estado"
 }
 
-politica_auditoria() {
+politica_pr() {
     local ruta=$1 nombre archivo permisos propietario politica elemento copia
     capturar_texto nombre valor_configuracion "$ruta" tunning.prPolicy
-    [[ -n $nombre ]] || fallar "$ruta" 'Falta tunning.prPolicy: política externa de comprobaciones e identidades auditoras.'
-    capturar_texto archivo ruta_externa "$ruta" "$nombre" 'La política de auditoría'
-    [[ -f $archivo ]] || fallar "$ruta" 'No existe la política de auditoría.'
+    if [[ -z $nombre ]]; then printf '{"checks":[],"reviewers":[]}'; return; fi
+    capturar_texto archivo ruta_externa "$ruta" "$nombre" 'La política de PR'
+    [[ -f $archivo ]] || fallar "$ruta" 'No existe la política de PR.'
     propietario=$(stat -c %u -- "$archivo"); permisos=$(stat -c %a -- "$archivo")
     [[ $propietario == "$(id -u)" ]] && (( (8#$permisos & 0022) == 0 )) || fallar "$ruta" 'La política debe pertenecer al usuario y no admitir escritura de grupo/otros.'
     copia=$(mktemp "$TEMPORALES/politica.XXXXXX"); cp -- "$archivo" "$copia"
     politica=$(leer_documento_json "$copia") || fallar "$ruta" 'La política no contiene JSON válido.'
-    comandos_validos "$(obtener_json "$politica" commands)" || fallar "$ruta" 'La política debe acordar comandos como arrays de argumentos.'
-    [[ $(tipo_json "$politica" checks) == array && $(tipo_json "$politica" auditors) == object && $(longitud_json "$(obtener_json "$politica" auditors)") -gt 0 ]] || fallar "$ruta" 'La política necesita checks y auditores autorizados.'
+    [[ $(tipo_json "$politica" checks) == array ]] || fallar "$ruta" 'La política necesita una lista checks (puede estar vacía).'
     while IFS= read -r elemento; do [[ $(tipo_json "$elemento") == string && -n $(obtener_texto_json "$elemento") ]] || fallar "$ruta" 'Nombre de check inválido en la política.'; done < <(elementos_json "$(obtener_json "$politica" checks)")
     if tiene_clave_json "$politica" reviewers; then
         [[ $(tipo_json "$politica" reviewers) == array ]] || fallar "$ruta" 'La lista de revisores debe ser un array.'
         while IFS= read -r elemento; do [[ $(tipo_json "$elemento") == string && -n $(obtener_texto_json "$elemento") ]] || fallar "$ruta" 'Revisor inválido en la política.'; done < <(elementos_json "$(obtener_json "$politica" reviewers)")
     fi
-    asignar_clave_json "$politica" _sha256 "$(citar_json "$(huella_archivo "$copia")")"
-}
-
-validar_auditoria() {
-    local ruta=$1 solicitud=$2 politica=$3 nombre archivo firma copia estado_firma errores huella cantidad=0 linea
-    local informe identidad implementador auditor resultados resultado ordenes='[]' clave esperado
-    local -a campos=()
-    capturar_texto nombre valor_configuracion "$ruta" tunning.auditReport
-    [[ -n $nombre ]] || fallar "$ruta" 'Falta tunning.auditReport: se requiere auditoría independiente firmada para este SHA.'
-    capturar_texto archivo ruta_externa "$ruta" "$nombre" 'El informe'; firma="$archivo.asc"
-    copia=$(mktemp "$TEMPORALES/informe.XXXXXX")
-    if ! cp -- "$archivo" "$copia" || ! cp -- "$firma" "$copia.asc"; then fallar "$ruta" 'Firma de auditoría inválida: no se pudieron leer el informe y su firma.'; fi
-    estado_firma=$(mktemp "$TEMPORALES/firma.XXXXXX"); errores=$(mktemp "$TEMPORALES/firma-error.XXXXXX")
-    if ! gpg --batch --no-auto-key-retrieve --status-fd=1 --verify "$copia.asc" "$copia" >"$estado_firma" 2>"$errores"; then fallar "$ruta" 'Firma de auditoría inválida, expirada o revocada.'; fi
-    while IFS= read -r linea; do
-        case $linea in
-            '[GNUPG:] VALIDSIG '*)
-                read -r -a campos <<< "$linea"; cantidad=$((cantidad+1)); huella=${campos[2]}
-                ((${#campos[@]} < 12)) || huella=${campos[-1]} ;;
-            '[GNUPG:] EXPKEYSIG '*|'[GNUPG:] EXPSIG '*|'[GNUPG:] REVKEYSIG '*|'[GNUPG:] BADSIG '*|'[GNUPG:] ERRSIG '*) fallar "$ruta" 'Firma de auditoría inválida, expirada o revocada.' ;;
-        esac
-    done < "$estado_firma"
-    [[ $cantidad == 1 && $huella =~ ^[A-Fa-f0-9]{40,64}$ ]] || fallar "$ruta" 'Firma de auditoría inválida, expirada o revocada.'
-    huella=${huella^^}; identidad=$(obtener_clave_json "$(obtener_json "$politica" auditors)" "$huella")
-    [[ $(tipo_json "$identidad") == object ]] || fallar "$ruta" 'El firmante no está autorizado por la política local de auditoría.'
-    informe=$(leer_documento_json "$copia") || fallar "$ruta" 'El informe firmado no contiene JSON válido.'
-    esperado=$(objeto_json schema 1 repository "$(citar_json "${REPOSITORIO_GITHUB[$ruta]}")" sha "$(citar_json "$(obtener_sha "$ruta")")" base_sha "$(obtener_json "$solicitud" base.sha)" children "$(referencias_modulos "$ruta" true)" pr "$(obtener_json "$solicitud" number)" issue "${INCIDENCIA[$ruta]}" policy_sha256 "$(obtener_json "$politica" _sha256)")
-    for clave in schema repository sha base_sha children pr issue policy_sha256; do json_iguales "$(obtener_json "$informe" "$clave")" "$(obtener_json "$esperado" "$clave")" || fallar "$ruta" 'Auditoría obsoleta: cambió SHA, base, hijos, PR, issue o política.'; done
-    implementador=$(obtener_json "$(leer_estado "$ruta")" implementer); auditor=$(obtener_json "$informe" auditor)
-    [[ -n $(obtener_texto_json "$implementador" provider) && -n $(obtener_texto_json "$implementador" session) && -n $(obtener_texto_json "$identidad" provider) && -n $(obtener_texto_json "$identidad" identity) ]] || fallar "$ruta" 'Faltan identidades verificadas del implementador o auditor.'
-    [[ $(obtener_json "$auditor" provider) == "$(obtener_json "$identidad" provider)" && $(obtener_json "$auditor" identity) == "$(obtener_json "$identidad" identity)" && -n $(obtener_texto_json "$auditor" session) && -n $(obtener_texto_json "$auditor" environment) && $(obtener_json "$auditor" provider) != "$(obtener_json "$implementador" provider)" && $(obtener_json "$auditor" session) != "$(obtener_json "$implementador" session)" ]] || fallar "$ruta" 'Se necesita un auditor autorizado de otro proveedor y sesión independiente.'
-    json_iguales "$(obtener_json "$informe" implementer)" "$implementador" || fallar "$ruta" 'La identidad del implementador no coincide con el manifiesto vigente.'
-    resultados=$(obtener_json "$informe" tests)
-    [[ $(tipo_json "$resultados") == array ]] || fallar "$ruta" 'Faltan resultados de comprobaciones en el informe.'
-    while IFS= read -r resultado; do
-        ordenes=$(agregar_json "$ordenes" "$(obtener_json "$resultado" argv)")
-        [[ $(obtener_json "$resultado" returncode) == 0 && $(obtener_texto_json "$resultado" log_sha256) =~ ^[a-f0-9]{64}$ ]] || fallar "$ruta" 'Auditoría con comprobaciones incompletas o fallidas.'
-    done < <(elementos_json "$resultados")
-    json_iguales "$ordenes" "$(obtener_json "$politica" commands)" || fallar "$ruta" 'Auditoría con comandos diferentes de los acordados.'
-    [[ $(obtener_json "$informe" findings) == '[]' && $(obtener_json "$informe" unchanged) == true && $(obtener_json "$informe" review_approved) == true ]] || fallar "$ruta" 'Auditoría con hallazgos, cambios de código o revisión pendiente.'
-    objeto_json fingerprint "$(citar_json "$huella")" report_sha256 "$(citar_json "$(huella_archivo "$copia")")" report "$informe"
-}
-
-ejecutar_auditoria() {
-    local ruta=$1 estado politica salida proveedor sesion entorno clave hallazgos archivo_hallazgos identidad solicitud incidencia filas anterior posterior sin_cambios=false
-    local resultados='[]' orden argumento directorio numero=0 codigo limite archivo_salida archivo_error archivo_registro huella resultado informe aprobado
-    local -a argumentos=()
-    export GIT_OPTIONAL_LOCKS=0
-    estado=$(leer_estado "$ruta")
-    [[ -n $(obtener_texto_json "$estado" pr) && -n $(obtener_texto_json "$estado" implementer.provider) ]] || fallar "$ruta" 'Primero el implementador debe publicar syncPR y registrar proveedor/sesión.'
-    capturar_texto salida obtener_texto_json "$OPCIONES" output; capturar_texto proveedor obtener_texto_json "$OPCIONES" provider; capturar_texto sesion obtener_texto_json "$OPCIONES" session
-    capturar_texto entorno obtener_texto_json "$OPCIONES" environment; clave=$(obtener_texto_json "$OPCIONES" signing_key); aprobado=$(obtener_texto_json "$OPCIONES" approve)
-    capturar_texto archivo_hallazgos obtener_texto_json "$OPCIONES" findings
-    [[ -n $salida && -n $proveedor && -n $sesion && -n $entorno && -n $clave ]] || fallar "$ruta" 'Auditoría: usa --output, --provider, --session, --environment y --signing-key.'
-    [[ $aprobado == true || -n $archivo_hallazgos ]] || fallar "$ruta" 'Declara --approve tras revisar, o --findings con hallazgos.'
-    capturar_texto salida ruta_externa "$ruta" "$salida" 'El informe'
-    [[ ! -e $salida && ! -L $salida && ! -e $salida.asc && ! -L $salida.asc ]] || fallar "$ruta" 'El informe o su firma ya existen; usa otra ruta para conservar la evidencia.'
-    politica=$(politica_auditoria "$ruta"); identidad=$(obtener_clave_json "$(obtener_json "$politica" auditors)" "${clave^^}")
-    [[ $(obtener_texto_json "$identidad" provider) == "$proveedor" && -n $(obtener_texto_json "$identidad" identity) && $proveedor != "$(obtener_texto_json "$estado" implementer.provider)" && $sesion != "$(obtener_texto_json "$estado" implementer.session)" ]] || fallar "$ruta" 'La política no autoriza a este auditor independiente/proveedor/sesión.'
-    REPOSITORIO_GITHUB[$ruta]=$(obtener_texto_json "$estado" repository); INCIDENCIA[$ruta]=$(obtener_texto_json "$estado" issue)
-    solicitud=$(api_github "$ruta" "pulls/$(obtener_texto_json "$estado" pr)")
-    [[ $(obtener_texto_json "$solicitud" merged) != true && $(obtener_texto_json "$solicitud" state) == open && $(obtener_sha "$ruta") == "$(obtener_texto_json "$estado" sha)" && $(obtener_texto_json "$solicitud" head.sha) == "$(obtener_texto_json "$estado" sha)" && $(obtener_texto_json "$solicitud" base.sha) == "$(obtener_texto_json "$estado" base_sha)" ]] || fallar "$ruta" 'El manifiesto/PR cambió antes de la auditoría.'
-    comprobar_limpieza "$ruta"; incidencia=$(api_github "$ruta" "issues/${INCIDENCIA[$ruta]}"); filas=$(extraer_criterios "$(obtener_texto_json "$incidencia" body)" "$ruta")
-    hallazgos='[]'
-    if [[ -n $archivo_hallazgos ]]; then capturar_texto archivo_hallazgos ruta_externa "$ruta" "$archivo_hallazgos" 'Los hallazgos'; hallazgos=$(canonizar_json "$(leer_documento_json "$archivo_hallazgos")"); fi
-    [[ $(tipo_json "$hallazgos") == array && ( $aprobado != true || $(longitud_json "$hallazgos") == 0 ) ]] || fallar "$ruta" 'Hallazgos debe ser un array; --approve requiere cero hallazgos.'
-    limite=$(obtener_texto_json "$politica" timeout_seconds); limite=${limite:-600}
-    [[ $limite =~ ^[1-9][0-9]*$ ]] || fallar "$ruta" 'El tiempo límite debe ser un entero positivo.'
-    anterior=$(inventariar_repositorio "$ruta"); directorio=$(mktemp -d /tmp/tunning-audit-checks.XXXXXX)
-    while IFS= read -r orden; do
-        numero=$((numero+1)); argumentos=()
-        while IFS= read -r argumento; do capturar_texto argumento obtener_texto_json "$argumento" ''; argumentos+=("$argumento"); done < <(elementos_json "$orden")
-        archivo_salida="$directorio/$numero.stdout"; archivo_error="$directorio/$numero.stderr"; archivo_registro="$directorio/$numero.log"
-        if (cd -- "$ruta" && timeout -- "$limite" "${argumentos[@]}") >"$archivo_salida" 2>"$archivo_error"; then codigo=0; else codigo=$?; fi
-        if [[ $codigo == 124 ]]; then printf timeout >"$archivo_registro"
-        else { cat -- "$archivo_salida"; printf '\n'; cat -- "$archivo_error"; } >"$archivo_registro"; fi
-        huella=$(huella_archivo "$archivo_registro")
-        resultado=$(objeto_json argv "$orden" returncode "$codigo" log_sha256 "$(citar_json "$huella")")
-        resultados=$(agregar_json "$resultados" "$resultado")
-    done < <(elementos_json "$(obtener_json "$politica" commands)")
-    if posterior=$(inventariar_repositorio "$ruta") && json_iguales "$anterior" "$posterior"; then sin_cambios=true; fi
-    informe=$(objeto_json schema 1 repository "$(obtener_json "$estado" repository)" sha "$(obtener_json "$estado" sha)" base_sha "$(obtener_json "$estado" base_sha)" children "$(referencias_modulos "$ruta" true)" pr "$(obtener_json "$estado" pr)" issue "$(obtener_json "$estado" issue)" criteria_sha256 "$(citar_json "$(huella_criterios "$filas")")" policy_sha256 "$(obtener_json "$politica" _sha256)" implementer "$(obtener_json "$estado" implementer)" auditor "$(objeto_json provider "$(citar_json "$proveedor")" session "$(citar_json "$sesion")" environment "$(citar_json "$entorno")" identity "$(obtener_json "$identidad" identity)")" tests "$resultados" findings "$hallazgos" unchanged "$sin_cambios" review_approved "${aprobado:-false}" timestamp "$(citar_json "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")")
-    mkdir -p -- "${salida%/*}"
-    (umask 077; set -o noclobber; printf '%s\n' "$informe" >"$salida") || fallar "$ruta" 'No se pudo crear el informe sin sobrescribir otro archivo.'
-    if ! gpg --batch --local-user "$clave" --armor --detach-sign --output "$salida.asc" "$salida" >"$directorio/firma.stdout" 2>"$directorio/firma.stderr"; then fallar "$ruta" "No se pudo firmar el informe $salida; se conserva sin aprobar."; fi
-    printf 'Informe de auditoría: %s; firma: %s.asc; sin cambios: %s; registros: %s.\n' "$salida" "$salida" "$sin_cambios" "$directorio"
-    [[ $sin_cambios == true && $hallazgos == '[]' && $aprobado == true ]] || fallar "$ruta" 'Auditoría fallida; informe conservado.'
-    while IFS= read -r resultado; do [[ $(obtener_json "$resultado" returncode) == 0 ]] || fallar "$ruta" 'Auditoría fallida; informe conservado.'; done < <(elementos_json "$resultados")
+    printf '%s' "$politica"
 }
 
 comprobar_fusion() {
@@ -485,14 +373,72 @@ comprobar_fusion() {
     while IFS= read -r revisor; do usuario=$(obtener_texto_json "$revisor"); tiene_clave_json "$aprobados" "$usuario" || fallar "$ruta" 'Faltan revisiones acordadas sobre el SHA actual.'; done < <(elementos_json "$(obtener_json "$politica" reviewers '[]')")
 }
 
+registrar_evidencia_terminal() {
+    local ruta=$1 solicitud=$2 numero=$3 incidencia cuerpo filas fila resultado pruebas='[]' resumen evidencia entradas='[]' quien sha usuario_gh
+    if (comprobar_criterios "$ruta" "$solicitud" "$numero" >/dev/null 2>&1); then return 0; fi
+    sha=$(obtener_texto_json "$solicitud" head.sha)
+    incidencia=$(api_github "$ruta" "issues/$numero"); cuerpo=$(obtener_texto_json "$incidencia" body); filas=$(extraer_criterios "$cuerpo" "$ruta")
+    while IFS= read -r resultado; do
+        [[ $(obtener_json "$resultado" returncode) == 0 ]] || fallar "$ruta" 'Hay comprobaciones locales fallidas; no se fusiona.'
+        pruebas=$(agregar_json "$pruebas" "$(objeto_json argv "$(obtener_json "$resultado" argv)" returncode 0 log_sha256 "$(obtener_json "$resultado" log_sha256)")")
+    done < <(elementos_json "${RESULTADOS_COMPROBACIONES[$ruta]-[]}")
+    if [[ $pruebas == '[]' ]]; then resumen='sin comprobaciones locales configuradas (tunning.testCommands)'
+    else resumen="$(longitud_json "$pruebas") comprobaciones locales aprobadas en este SHA antes del push"; fi
+    quien="$(git -C "$ruta" config user.name || :) <$(git -C "$ruta" config user.email || :)>"
+    usuario_gh=$(GH_PROMPT_DISABLED=1 gh api --hostname github.com user --jq .login 2>/dev/null || :)
+    while IFS= read -r fila; do
+        entradas=$(agregar_json "$entradas" "$(objeto_json id "$(obtener_json "$fila" 0)" detail "$(citar_json "Verificado en terminal por $quien${usuario_gh:+ (@$usuario_gh)} para $sha; $resumen.")")")
+    done < <(elementos_json "$filas")
+    evidencia=$(objeto_json schema 1 repository "$(citar_json "${REPOSITORIO_GITHUB[$ruta]}")" sha "$(citar_json "$sha")" base_sha "$(obtener_json "$solicitud" base.sha)" \
+        criteria_sha256 "$(citar_json "$(huella_criterios "$filas")")" source '"terminal"' \
+        confirmed_by "$(objeto_json git "$(citar_json "$quien")" github "$(citar_json "$usuario_gh")" host "$(citar_json "$(id -un)@$(hostname)")" timestamp "$(citar_json "$(date -u '+%Y-%m-%dT%H:%M:%SZ')")")" \
+        local_tests "$pruebas" criteria "$entradas")
+    api_github "$ruta" "issues/$numero" PATCH "$(objeto_json body "$(citar_json "$(actualizar_cuerpo_criterios "$cuerpo" "$evidencia")")")" >/dev/null
+    printf '=> [%s] Issue #%s: criterios y evidencia de terminal registrados.\n' "$(rotulo "$ruta")" "$numero"
+}
+
+marcar_pr_listo() {
+    local ruta=$1 solicitud=$2 numero
+    [[ $(obtener_json "$solicitud" draft) == true ]] || return 0
+    numero=$(obtener_texto_json "$solicitud" number)
+    printf '=> [%s] Marcando PR #%s listo para revisión...\n' "$(rotulo "$ruta")" "$numero"
+    (cd -- "$ruta" && GH_PROMPT_DISABLED=1 gh pr ready "$numero" --repo "github.com/${REPOSITORIO_GITHUB[$ruta]}") >/dev/null || fallar "$ruta" "No se pudo marcar el PR #$numero listo para revisión."
+}
+
+# Espera a que GitHub calcule mergeable y terminen los checks; no decide el resultado.
+esperar_pr_fusionable() {
+    local ruta=$1 numero=$2 limite inicio=$SECONDS solicitud identificador elemento nombre pendiente estados vistos
+    limite=$(valor_configuracion "$ruta" tunning.mergeTimeout); limite=${limite:-600}
+    [[ $limite =~ ^[1-9][0-9]*$ ]] || fallar "$ruta" 'tunning.mergeTimeout debe ser un entero positivo (segundos).'
+    while :; do
+        solicitud=$(api_github "$ruta" "pulls/$numero"); identificador=$(obtener_texto_json "$solicitud" head.sha); pendiente=
+        if [[ $(obtener_json "$solicitud" mergeable) == null || $(obtener_texto_json "$solicitud" mergeable_state) == unknown ]]; then pendiente='GitHub calcula si el PR es fusionable'
+        else
+            while IFS= read -r elemento; do
+                [[ $(obtener_texto_json "$elemento" status) == completed ]] || pendiente="check $(obtener_texto_json "$elemento" name)"
+            done < <(elementos_json "$(paginas_github "$ruta" "commits/$identificador/check-runs?filter=latest" check_runs)")
+            estados=$(paginas_github "$ruta" "commits/$identificador/statuses"); vistos='{}'
+            while IFS= read -r elemento; do
+                nombre=$(obtener_texto_json "$elemento" context); ! tiene_clave_json "$vistos" "$nombre" || continue
+                vistos=$(asignar_clave_json "$vistos" "$nombre" true)
+                [[ $(obtener_texto_json "$elemento" state) != pending ]] || pendiente="estado $nombre"
+            done < <(elementos_json "$estados")
+        fi
+        if [[ -z $pendiente ]]; then printf '%s' "$solicitud"; return; fi
+        (( SECONDS - inicio < limite )) || fallar "$ruta" "Tiempo de espera agotado (${limite}s): $pendiente. Repite git syncPRmerge."
+        printf '=> [%s] Esperando %s...\n' "$(rotulo "$ruta")" "$pendiente" >&2
+        sleep 5
+    done
+}
+
 fusionar_arbol() {
-    local ruta=$1 hijo ruta_hija referencias ruta_relativa estado recibo solicitud numero politica evidencia auditoria informe metodo permiso resultado padres cantidad arbol_auditado fresca remotos esperado identificado
+    local ruta=$1 hijo ruta_hija referencias ruta_relativa estado recibo solicitud numero politica evidencia hijos_esperados metodo permiso resultado padres cantidad arbol_auditado fresca remotos esperado identificado
     local -a firma=()
     while IFS= read -r hijo; do capturar_texto ruta_hija obtener_texto_json "$hijo" repo; fusionar_arbol "$ruta_hija"; done < <(elementos_json "${HIJOS[$ruta]}")
     referencias=$(referencias_modulos "$ruta" true)
     while IFS= read -r hijo; do
         capturar_texto ruta_hija obtener_texto_json "$hijo" repo; capturar_texto ruta_relativa obtener_texto_json "$hijo" path
-        if [[ $(obtener_texto_clave_json "$referencias" "$ruta_relativa") != "$(obtener_sha "$ruta_hija")" ]]; then sincronizar "$ruta"; fallar "$ruta" 'Las fusiones hijas cambiaron referencias: nuevo commit padre publicado; necesita nuevas pruebas y auditoría antes de fusionar.'; fi
+        if [[ $(obtener_texto_clave_json "$referencias" "$ruta_relativa") != "$(obtener_sha "$ruta_hija")" ]]; then sincronizar "$ruta"; fallar "$ruta" 'Las fusiones hijas cambiaron referencias: nuevo commit padre publicado; repite git syncPRmerge.'; fi
     done < <(elementos_json "${HIJOS[$ruta]}")
     estado=$(leer_estado "$ruta"); recibo=$(obtener_json "$estado" merged)
     if [[ ! ${SOLICITUDES_CAMBIO[$ruta]+presente} ]]; then
@@ -508,12 +454,22 @@ fusionar_arbol() {
     numero=$(obtener_texto_json "${SOLICITUDES_CAMBIO[$ruta]}" number); solicitud=$(api_github "$ruta" "pulls/$numero")
     [[ $(obtener_json "$solicitud" merged) != true ]] || fallar "$ruta" 'El PR ya fue fusionado fuera de esta ejecución; vuelve a sincronizar y validar su resultado.'
     [[ $(obtener_texto_json "$solicitud" head.sha) == "$(obtener_sha "$ruta")" && $(obtener_texto_json "$solicitud" base.ref) == "${BASE[$ruta]}" ]] || fallar "$ruta" 'El PR cambió de SHA/base después de publicarlo.'
-    politica=$(politica_auditoria "$ruta")
+    politica=$(politica_pr "$ruta")
+    registrar_evidencia_terminal "$ruta" "$solicitud" "${INCIDENCIA[$ruta]}"
     evidencia=$(comprobar_criterios "$ruta" "$solicitud" "${INCIDENCIA[$ruta]}" "$(obtener_texto_json "$politica" workflow)")
-    auditoria=$(validar_auditoria "$ruta" "$solicitud" "$politica"); informe=$(obtener_json "$auditoria" report)
-    [[ $(obtener_texto_json "$informe" criteria_sha256) == "$(obtener_texto_json "$evidencia" criteria_sha256)" ]] || fallar "$ruta" 'La auditoría no cubre los criterios vigentes del issue.'
+    marcar_pr_listo "$ruta" "$solicitud"
+    solicitud=$(esperar_pr_fusionable "$ruta" "$numero")
+    [[ $(obtener_texto_json "$solicitud" head.sha) == "$(obtener_sha "$ruta")" && $(obtener_texto_json "$solicitud" base.sha) == "$(obtener_texto_json "$evidencia" base_sha)" ]] || fallar "$ruta" 'El PR cambió de SHA o base mientras se esperaba a GitHub; repite git syncPRmerge.'
+    hijos_esperados=$(referencias_modulos "$ruta" true)
     comprobar_fusion "$ruta" "$solicitud" "$politica"
-    metodo=$(obtener_texto_json "$politica" merge_method); metodo=${metodo:-merge}
+    metodo=$(obtener_texto_json "$politica" merge_method); [[ -n $metodo ]] || metodo=$(valor_configuracion "$ruta" tunning.mergeMethod)
+    if [[ -z $metodo ]]; then
+        metodo=merge
+        if [[ $(obtener_json "${METADATOS[$ruta]}" allow_merge_commit) == false ]]; then
+            if [[ $(obtener_json "${METADATOS[$ruta]}" allow_squash_merge) == true ]]; then metodo=squash
+            elif [[ $(obtener_json "${METADATOS[$ruta]}" allow_rebase_merge) == true ]]; then metodo=rebase; fi
+        fi
+    fi
     case $metodo in merge) permiso=allow_merge_commit ;; squash) permiso=allow_squash_merge ;; rebase) permiso=allow_rebase_merge ;; *) fallar "$ruta" 'Método de merge no permitido por la política.' ;; esac
     [[ $(obtener_json "${METADATOS[$ruta]}" "$permiso") == true ]] || fallar "$ruta" 'Método de merge no permitido por GitHub.'
     identificado=$(obtener_texto_json "$solicitud" head.sha); esperado=$(obtener_texto_json "$solicitud" base.sha)
@@ -522,11 +478,11 @@ fusionar_arbol() {
     comprobar_limpieza "$ruta"; fresca=$(api_github "$ruta" "pulls/$numero")
     remotos=$(referencias_remotas "$ruta" "${URL_PUBLICACION[$ruta]}" "refs/heads/${RAMA[$ruta]}" "refs/heads/${BASE[$ruta]}")
     [[ $(obtener_texto_json "$fresca" head.sha) == "$identificado" && $(obtener_texto_json "$fresca" base.sha) == "$esperado" && $(obtener_texto_clave_json "$remotos" "refs/heads/${RAMA[$ruta]}") == "$identificado" && $(obtener_texto_clave_json "$remotos" "refs/heads/${BASE[$ruta]}") == "$esperado" && $(obtener_sha "$ruta") == "$identificado" ]] || fallar "$ruta" 'HEAD/base/referencias cambiaron justo antes de fusionar; evidencia invalidada.'
-    json_iguales "$(referencias_modulos "$ruta" true)" "$(obtener_json "$informe" children)" || fallar "$ruta" 'Las referencias cambiaron antes de fusionar.'
+    json_iguales "$(referencias_modulos "$ruta" true)" "$hijos_esperados" || fallar "$ruta" 'Las referencias cambiaron antes de fusionar.'
     resultado=$(api_github "$ruta" "pulls/$numero/merge" PUT "$(objeto_json sha "$(citar_json "$identificado")" merge_method "$(citar_json "$metodo")")")
     [[ $(obtener_json "$resultado" merged) == true && -n $(obtener_texto_json "$resultado" sha) ]] || fallar "$ruta" 'GitHub rechazó la fusión; los ancestros se detienen.'
     recibo=$(objeto_json pr "$numero" sha "$(obtener_json "$resultado" sha)" head_sha "$(citar_json "$identificado")" base_sha "$(citar_json "$esperado")")
-    estado=$(asignar_clave_json "$(asignar_clave_json "$estado" merged "$recibo")" audit "$auditoria"); guardar_estado "$ruta" "$estado"; FUSIONADOS[$ruta]=$recibo
+    estado=$(asignar_clave_json "$(asignar_clave_json "$estado" merged "$recibo")" evidence "$evidencia"); guardar_estado "$ruta" "$estado"; FUSIONADOS[$ruta]=$recibo
     resultado=$(obtener_texto_json "$recibo" sha); asegurar_confirmacion "$ruta" "$resultado" "${URL_PUBLICACION[$ruta]}"
     capturar_git "$ruta" padres 0 log -1 --format=%P "$resultado"
     case $metodo in

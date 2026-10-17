@@ -12,14 +12,14 @@ en Bash y apoyado en Git y las herramientas básicas de Ubuntu. Sus módulos
 se instalan junto al motor; el segundo procesa JSON en Bash.
 `git sync` conserva el flujo de equipo: confirma, integra, comprueba en local y
 publica; no usa la API de GitHub ni modifica issues. `git syncPR` añade issues y PR en borrador,
-de hijos a padres, sin fusionarlos. `git syncPRmerge` prepara esos mismos PR y
-solo fusiona cuando pasan los criterios, las comprobaciones y la auditoría independiente.
+de hijos a padres, sin fusionarlos. `git syncPRmerge` prepara esos mismos PR,
+registra la evidencia de pruebas locales en el issue y fusiona en la terminal.
 
 Las comprobaciones se ejecutan en la terminal antes del push. Si fallan, el comando
 conserva el trabajo y se detiene para corregirlo. Terminal Tuning mantiene sus
 comprobaciones en local, sin configuración `.github` ni estados de pruebas o
-criterios enviados a GitHub. La evidencia de aceptación y la auditoría
-independiente se validan también en la terminal antes de una fusión solicitada.
+criterios enviados a GitHub. La evidencia de aceptación se valida también en la
+terminal antes de una fusión solicitada, sin depender de agentes de IA.
 Los modos PR siguen usando GitHub para gestionar issues, PR, revisiones y las
 demás reglas del repositorio.
 
@@ -30,11 +30,9 @@ instalación y los tres alias se puedan revisar y ejecutar con las herramientas
 de la terminal. El motor común conserva el mismo comportamiento de firmas,
 ramas, remotos y submódulos en cada modo.
 
-El módulo JSON trata las respuestas de GitHub, la configuración y los informes
+El módulo JSON trata las respuestas de GitHub, la configuración y la evidencia
 como datos, conserva los argumentos literales y calcula huellas sobre una
-representación uniforme de Unicode. La política y el informe se copian a
-temporales privados: la lectura, la verificación GPG y el cálculo de huellas
-utilizan los mismos bytes para evitar cambios entre esas operaciones.
+representación uniforme de Unicode.
 
 El [instalador Bash](../scripts/install.sh) actualiza juntos el motor y sus
 módulos, con respaldos, escritura atómica y restauración ante errores. Así,
@@ -84,125 +82,92 @@ sin retirar otros responsables y se comprueba que GitHub permita asignarlo.
 Un issue necesita `## Criterios de aceptación` y casillas `- [ ]`/`- [x]`.
 La comprobación local rechaza casillas pendientes y exige un bloque JSON
 `tunning-evidence`: SHA del PR, SHA base, resumen de los criterios y explicación
-por criterio vinculada a una auditoría local firmada y sus resultados.
+por criterio vinculada a las comprobaciones locales de la terminal y sus resultados.
 Editar el código, la base o los criterios invalida la evidencia anterior.
 
-Un responsable comprueba el contenido de cada criterio y prepara fuera del
-checkout un array JSON: `[{"id":"A1","detail":"Comando, resultado y caso comprobado"}, ...]`.
-Los IDs siguen el orden de las casillas de aceptación; deben cubrirlas todas.
-Después de pasar las pruebas y obtener el informe independiente firmado del SHA
-y base publicados, puede registrar esa evidencia y marcar las casillas:
+Durante `git syncPRmerge`, tras superar las comprobaciones locales antes del
+push, el motor registra automáticamente la evidencia de terminal (`source: "terminal"`)
+con los comandos ejecutados, códigos de retorno y hashes SHA256 de sus logs, y
+marca las casillas del issue si aún no existía evidencia vigente para ese SHA.
+
+Si deseas detallar manualmente la explicación de cada criterio, prepara fuera del
+checkout un array JSON `[{"id":"A1","detail":"Comando, resultado y caso comprobado"}, ...]`
+y regístralo:
 
 ```bash
 bash scripts/check-issue-criteria.sh --repository JovannyCO/terminal-tuning --pr 12 \
-  --record /tmp/criterios-verificados.json --local-audit
+  --record /tmp/criterios-verificados.json
 bash scripts/check-issue-criteria.sh --repository JovannyCO/terminal-tuning --pr 12
 ```
 
-El registro no evalúa semánticamente las explicaciones: representa la revisión
-explícita del responsable y comprueba la cobertura y el informe configurado en
-`tunning.auditReport` con la política `tunning.prPolicy`. No crea pruebas ni
-auditorías inexistentes. El informe incluye comandos, resultados y hashes de
-logs; la evidencia vincula esos datos al SHA y base vigentes. No reutilices un
-informe de otro commit ni inventes identidad, firma o resultados.
+Una nueva publicación o una base distinta exige actualizar la evidencia para el
+nuevo SHA. El motor bloquea la fusión si la evidencia no corresponde al estado actual.
 
-El registro actualiza el JSON de evidencia y las casillas del issue tras la
-validación local del informe firmado. Una nueva publicación o una base distinta
-exige repetir la validación. El motor bloquea la fusión si la evidencia no
-corresponde al estado actual, aunque las pruebas hayan pasado.
+Para Terminal Tuning, las comprobaciones se ejecutan en la terminal (`bash scripts/verify.sh`),
+sin requerir checks de GitHub Actions. El motor no modifica ni omite reglas
+remotas: una regla de otro repositorio que exija un check sigue siendo
+obligatoria hasta que su responsable la cambie.
 
-Para Terminal Tuning, configura `checks: []` en la política porque sus comprobaciones se
-ejecutan en local. Sus reglas de rama conservan las demás restricciones acordadas, como
-la aplicación a administradores y la prohibición de force push. El motor no
-modifica ni omite reglas remotas: una regla de otro repositorio que exija un
-check sigue siendo obligatoria hasta que su responsable la cambie.
-
-`--record ... --run ID` conserva compatibilidad histórica para repositorios que
-usen CI. Esa opción no forma parte del flujo de Terminal Tuning ni reemplaza la
-auditoría independiente para fusionar.
+`--record ... --run ID` conserva compatibilidad para repositorios que usen CI
+en GitHub Actions.
 
 ## Política de auditoría
 
-Las auditorías firman y verifican sus informes con GPG. Guarda la política y
-los informes fuera del checkout y del directorio Git.
-Configura `tunning.prPolicy` con la ruta de un JSON que pertenezca al usuario
-y no admita escritura de grupo/otros. Acuerda las comprobaciones y las identidades
-antes de auditar; el código de un PR no debe poder modificar esta política.
+De forma predeterminada no se requiere archivo de política externa ni agentes de IA:
+`git syncPRmerge` valida las comprobaciones locales configuradas en el repositorio,
+la evidencia vigente del issue y el estado de integración del PR en GitHub.
+
+Si un repositorio necesita exigir checks remotos específicos, revisores o un
+método de integración fijo, configura `tunning.prPolicy` con la ruta de un JSON
+fuera del checkout y del directorio Git que pertenezca al usuario y no admita
+escritura de grupo/otros:
 
 ```json
 {
-  "commands": [["bash", "scripts/verify.sh"]],
   "checks": [],
   "merge_method": "merge",
-  "reviewers": [],
-  "auditors": {
-    "FINGERPRINT_GPG_COMPLETO": {"provider": "anthropic", "identity": "Identidad verificada por el responsable"}
-  }
+  "reviewers": []
 }
 ```
 
-El ejemplo acuerda comprobaciones locales sin checks de GitHub requeridos. Para otros
-repositorios, una política aprobada puede acordar checks remotos, comandos y
-revisores; no se cambia en silencio para hacer pasar un PR. El fingerprint y
-las identidades del ejemplo son marcadores: reemplázalos por datos comprobados
-antes de usar la política.
-
-Registra el proveedor y sesión del implementador con
-`tunning.implementerProvider` y `tunning.implementerSession`. El auditor usa
-otro proveedor y sesión, firma su informe y no corrige código. Solo se aceptan
-firmas GPG vigentes de fingerprints autorizados en la política local, usando
-claves públicas previamente verificadas. La firma acredita el firmante; la
-asociación de esa persona con un proveedor la establece el responsable al
-autorizar la clave. No demuestra por sí sola qué modelo ejecutó una terminal.
-
-El informe incluye SHA/base, referencias hijas, criterios, implementador,
-auditor/entorno/sesión, comandos/resultados y hashes de logs, sin hallazgos.
-`tunning.auditReport` apunta al informe; su firma separada usa el sufijo `.asc`.
-Una aprobación escrita en texto libre o los tests del implementador no lo
-sustituyen. No publiques logs con credenciales o datos privados.
-
-En la terminal del auditor, después de revisar el código, genera el informe
-con el mismo motor instalado. Este modo ejecuta solo las comprobaciones acordadas,
-comprueba HEAD, bytes del índice y archivos propios/hijos antes y después,
-y conserva incluso los informes fallidos; no confirma, publica ni corrige.
-
-```bash
-~/.local/bin/git-sync --tunning-mode=audit \
-  --provider anthropic --session claude-terminal-2 --environment terminal-2 \
-  --signing-key FINGERPRINT_GPG_COMPLETO --output /tmp/auditoria-sha.json --approve
-git config tunning.auditReport /tmp/auditoria-sha.json
-```
-
-Si hay defectos, usa `--findings /tmp/hallazgos.json` (array JSON) en lugar de
-`--approve` y entrega el resultado al implementador. Usa otra ruta para cada
-informe; no sobrescribe informes ni firmas. El comando detecta cambios de
-código pero no aísla procesos: las comprobaciones acordadas también deben ser de
-lectura sobre el checkout. Conserva los cambios inesperados para su revisión.
-El responsable autoriza la clave y el auditor declara el entorno/sesión;
-la herramienta no certifica que se trate de otra máquina física.
-
 ## Fusión y reanudación
 
-`git syncPRmerge` verifica pruebas y evidencia local, auditoría independiente,
-revisiones acordadas, estado del PR, método permitido y SHA remoto/base
-inmediatamente antes de la llamada a GitHub. En otros repositorios comprueba
-también los checks remotos que exija su política.
-Usa la condición `sha` del endpoint normal de merge; no emplea force ni
-admin override. GitHub aplica las protecciones y reglas adicionales del repo.
-No exige al autor autoaprobar su propio PR.
-Los PR se crean en borrador: el responsable debe marcarlos listos para revisión
-tras comprobar sus criterios. Un borrador siempre bloquea la fusión.
+`git syncPRmerge` se ejecuta íntegramente en la terminal (incluida Google Cloud
+Shell) con Bash, Git y `gh` autenticado, sin depender de ningún agente de IA:
+
+1. Sincroniza el árbol de hijos a padres, ejecuta las comprobaciones locales y
+   publica cada rama de trabajo.
+2. Crea o actualiza el issue de criterios y el PR listo para revisión (o marca
+   listo un PR en borrador creado previamente con `git syncPR`).
+3. Registra y verifica en el issue la evidencia `source: "terminal"` vinculada
+   al SHA, al SHA base y a los resultados de las comprobaciones locales.
+4. Espera a que GitHub calcule `mergeable` y terminen los checks pendientes
+   (`tunning.mergeTimeout`, 600 s por defecto).
+5. Verifica las condiciones de fusión (`mergeable`, estado limpio, ausencia de
+   revisiones que soliciten cambios y `tunning.prPolicy` si se configuró) y
+   fusiona usando la condición `sha` del endpoint normal de merge.
+6. Integra el commit de fusión en la rama activa, ejecuta las comprobaciones
+   locales y publica la rama actualizada.
+
+```bash
+gh auth login            # una vez; en Cloud Shell persiste en ~/.config/gh
+git switch -c mi-rama    # syncPR* no trabajan sobre la rama base
+git syncPRmerge "feat: cambio"
+```
+
+El método de integración puede fijarse con `tunning.mergeMethod` o en
+`tunning.prPolicy`; si no se indica, se usa el primero permitido por el
+repositorio (`merge`, `squash` o `rebase`). No emplea force ni admin override.
 
 El progreso se guarda por repositorio en el directorio Git, en
 `tunning-sync/state.json`. Las fusiones remotas son parciales: un fallo detiene
 los ancestros, conserva las fusiones completadas y permite reanudar.
-Un merge hijo suele crear otro commit; el implementador publica la referencia
-actualizada del padre y se detiene para nuevas pruebas y auditoría del nuevo SHA.
+Si un merge hijo crea otro commit, el padre publica la referencia actualizada y
+pide repetir `git syncPRmerge` para validar y fusionar el nuevo SHA.
 Merge avanza la rama hija sin perder historia. Para squash/rebase, el motor
 comprueba el árbol resultante e integra ese resultado en la rama activa con
-un merge firmado, conservando los commits originales y publicándolo. El padre
-referencia ese nuevo HEAD publicado, que contiene el resultado fusionado, y
-necesita nueva evidencia/auditoría. Rebase exige historia lineal en el PR.
+un merge, conservando los commits originales y publicándolo. Rebase exige
+historia lineal en el PR.
 
 La API condiciona el HEAD, pero no ofrece una comparación atómica del SHA base:
 si la base cambia durante la petición, se detecta al revisar los padres del

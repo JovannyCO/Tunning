@@ -351,6 +351,7 @@ if [[ $omitir_paquetes != true ]]; then
     if [[ $activar_extras == true ]]; then
         if [[ $perfil == cloudshell ]]; then bash "$DIRECTORIO_REPOSITORIO/scripts/install-cloudshell-extras.sh";
         else sudo apt-get install -y starship eza fastfetch; fi
+    elif [[ $perfil == cloudshell ]]; then bash "$DIRECTORIO_REPOSITORIO/scripts/install-cloudshell-extras.sh" --gh-only
     fi
 fi
 if ((${#rutas_destino[@]})); then aplicar_cambios;

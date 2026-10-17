@@ -69,13 +69,11 @@ proyectos pueden usar `production`. No impongas una rama a los submódulos ni
 fusiones PR automáticamente.
 
 `git sync`, `git syncPR` y `git syncPRmerge` comprueban el resultado local
-antes del push. Para otros proyectos configura sus comprobaciones mediante
-`tunning.testCommands`; no supongas que las comprobaciones de Terminal Tuning validan sus
-submódulos. La evidencia de criterios y la auditoría independiente se validan
-en local antes de una fusión solicitada: usa el SHA y la base reales,
-informes firmados y hashes de
-logs. No inventes informes ni marques requisitos pendientes solo porque pasaron
-las pruebas. Consulta [docs/GIT-PR.md](docs/GIT-PR.md).
+antes del push y se ejecutan 100 % en la terminal sin depender de un agente de IA.
+Para otros proyectos configura sus comprobaciones mediante `tunning.testCommands`;
+no supongas que las comprobaciones de Terminal Tuning validan sus submódulos.
+La evidencia de criterios se registra y valida con el SHA, la base y los hashes de
+logs reales de las comprobaciones locales. Consulta [docs/GIT-PR.md](docs/GIT-PR.md).
 
 Comunica qué se verificó y qué queda pendiente. Una prueba local del perfil
 Cloud Shell no certifica su navegador, sus fuentes ni la persistencia real.
