@@ -33,6 +33,9 @@ preparar_binario() {
     herramientas_pendientes+=("$herramienta")
 }
 
+solo_gh=false
+[[ ${1-} != --gh-only ]] || solo_gh=true
+if [[ $solo_gh != true ]]; then
 preparar_binario starship v1.26.0 \
     https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz \
     b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3 starship
@@ -42,6 +45,14 @@ preparar_binario eza v0.23.5 \
 preparar_binario fastfetch 2.69.0 \
     https://github.com/fastfetch-cli/fastfetch/releases/download/2.69.0/fastfetch-linux-amd64.tar.gz \
     9fe880a34de3fec88e57a69230c02fd7be0846db3f3ea9f88f2b74489a79ff55 fastfetch-linux-amd64/usr/bin/fastfetch
+fi
+# git syncPR/syncPRmerge usan gh; se conserva el del sistema si ya existe.
+if command -v gh >/dev/null; then printf 'Conservar: %s\n' "$(command -v gh)"
+else
+    preparar_binario gh v2.102.0 \
+        https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_linux_amd64.tar.gz \
+        bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386 gh_2.102.0_linux_amd64/bin/gh
+fi
 
 # Descargar, verificar y probar todos antes de escribir en el usuario.
 if (( ${#herramientas_pendientes[@]} )); then

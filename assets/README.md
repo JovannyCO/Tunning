@@ -92,8 +92,7 @@ y crea un archivo nuevo. Revisa textos, proporción, márgenes y legibilidad a
 
 ## Historial de las piezas anteriores
 
-Los cuatro PNG anteriores se conservan bajo `assets/_borrar/`, con su
-estructura relativa. Esta carpeta queda fuera del inventario de recursos activos.
+Los cuatro PNG anteriores se retiraron tras archivar `assets/_borrar/`.
 Los prompts y las medidas que siguen describen ese diseño anterior; el contrato
 vigente es el de las piezas actuales y el manifiesto.
 
@@ -108,8 +107,8 @@ ilustraciones de marca. Presentan el proyecto como caso de trabajo de
 
 | Archivo final | Uso | Dimensiones PNG | Destino del enlace |
 |---|---|---|---|
-| [terminal-tuning-jovanny-co-header.png](_borrar/brand/terminal-tuning-jovanny-co-header.png) | Presentación profesional y del proyecto | 1944 × 809 | [Explora el proyecto](../README.md#de-una-terminal-nueva-a-un-entorno-de-trabajo) |
-| [terminal-tuning-jovanny-co-footer.png](_borrar/brand/terminal-tuning-jovanny-co-footer.png) | Colaboración y contacto | 1942 × 809 | [Contacta al desarrollador](mailto:proyectos@Jovanny.CO) |
+| `terminal-tuning-jovanny-co-header.png` | Presentación profesional y del proyecto | 1944 × 809 | [Explora el proyecto](../README.md#de-una-terminal-nueva-a-un-entorno-de-trabajo) |
+| `terminal-tuning-jovanny-co-footer.png` | Colaboración y contacto | 1942 × 809 | [Contacta al desarrollador](mailto:proyectos@Jovanny.CO) |
 
 Ambas piezas tienen fondo opaco y composición panorámica cercana a 12:5. El
 README conserva las llamadas a la acción como enlaces de texto real, además

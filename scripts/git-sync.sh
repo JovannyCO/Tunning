@@ -10,8 +10,8 @@ shopt -s inherit_errexit
 AYUDA='Uso: git sync ["mensaje"]
      git syncPR ["mensaje"] [--issue N]
      git syncPRmerge ["mensaje"] [--issue N]
-Los alias usan Bash y Git. sync publica; syncPR prepara PR;
-syncPRmerge exige evidencia vigente y auditoría independiente para fusionar.
+Los alias usan Bash y Git (los modos PR, también gh). sync publica; syncPR prepara
+PR; syncPRmerge registra la evidencia de pruebas locales y fusiona en la terminal.
 Valida e inicializa submódulos recursivos en sus commits registrados.
 Exceptúa .brand y repositorios __*: solo registra el SHA elegido, sin modificarlos.
 De hijos a padres: agrega cambios, crea commits, integra mediante merge la rama
@@ -20,7 +20,8 @@ HEAD separado necesita submodule.<nombre>.branch; branch=. usa la rama padre.
 Se respetan firmas, remotos, ramas activas y configuración por repositorio.
 Los modos PR necesitan gh autenticado en github.com y una rama distinta de la
 base (tunning.prBase o rama predeterminada real). No crean ramas arbitrarias.
-Política/auditorías externas: tunning.prPolicy y tunning.auditReport.
+Opcionales: tunning.prPolicy (checks/revisores/merge_method), tunning.mergeMethod,
+tunning.mergeTimeout.
 Comprobaciones: tunning.testCommands (JSON de arrays de argumentos) o
 bash scripts/verify.sh cuando existe. Un fallo bloquea el push y sus padres.
 Ver docs/GIT-PR.md para evidencia, firmas, comprobaciones y reanudación.'
@@ -28,6 +29,8 @@ MODO=sync
 if [[ ${1-} == --tunning-mode=* ]]; then MODO=${1#*=}; shift; fi
 if [[ ${1-} == --help || ${1-} == -h ]]; then printf '%s\n' "$AYUDA"; exit 0; fi
 RAIZ= MENSAJE= OPCIONES='{}' TEMPORALES= ESTADO_GIT=0
+# Cloud Shell conserva las herramientas de usuario (como gh) en HOME.
+[[ -z ${HOME-} || :$PATH: == *":$HOME/.local/bin:"* ]] || PATH="$PATH:$HOME/.local/bin"
 PID_SINCRONIZACION=$BASHPID
 CONTADOR_CAPTURAS=0
 # Las claves son rutas absolutas. Los valores estructurados usan el módulo JSON Bash.
@@ -536,7 +539,7 @@ mostrar_resumen() {
 }
 interpretar_opciones() {
     local opcion clave valor tipo terminar=false; local -a mensajes=()
-    OPCIONES='{"local_audit":false,"approve":false}'
+    OPCIONES='{}'
     while (($#)); do
         opcion=$1; shift
         if [[ $MODO != sync && $terminar == false && $opcion == --*=* ]]; then set -- "${opcion#*=}" "$@"; opcion=${opcion%%=*}; fi
@@ -544,9 +547,7 @@ interpretar_opciones() {
         if [[ $MODO == sync || $terminar == true || $opcion != --* ]]; then mensajes+=("$opcion"); continue; fi
         case "$opcion" in
             --) terminar=true ;;
-            --local-audit) OPCIONES=$(asignar_clave_json "$OPCIONES" local_audit true) ;;
-            --approve) OPCIONES=$(asignar_clave_json "$OPCIONES" approve true) ;;
-            --issue|--repository|--pr|--record|--run|--output|--provider|--session|--environment|--signing-key|--findings)
+            --issue|--repository|--pr|--record|--run)
                 (($#)) || fallar "$PWD" "$opcion necesita un valor."
                 clave=${opcion#--}; clave=${clave//-/_}; valor=$1; shift
                 if [[ $clave == issue || $clave == pr || $clave == run ]]; then
@@ -570,9 +571,12 @@ principal() {
     source "$directorio_guion/git-pr.sh"
     interpretar_opciones "$@"
     if [[ $MODO == criteria ]]; then gestionar_criterios; return; fi
-    case "$MODO" in sync|syncPR|syncPRmerge|audit) ;; *) fallar "$PWD" "Modo desconocido: $MODO." ;; esac
+    case "$MODO" in sync|syncPR|syncPRmerge) ;; *) fallar "$PWD" "Modo desconocido: $MODO." ;; esac
+    if [[ $MODO == syncPR || $MODO == syncPRmerge ]]; then
+        command -v gh >/dev/null || fallar "$PWD" 'Los modos PR necesitan GitHub CLI (gh). En Cloud Shell, bash setup.sh lo instala en ~/.local/bin.'
+        GH_PROMPT_DISABLED=1 gh auth status --hostname github.com >/dev/null 2>&1 || fallar "$PWD" 'gh no está autenticado en github.com: ejecuta gh auth login.'
+    fi
     capturar_git "$PWD" resultado 0 rev-parse --show-toplevel; capturar_texto RAIZ ruta_real "$resultado"
-    if [[ $MODO == audit ]]; then ejecutar_auditoria "$RAIZ"; return; fi
     printf '%s\n' '=> Validando repositorios y submódulos antes de confirmar cambios...'
     preparar_repositorio "$RAIZ"; sincronizar "$RAIZ"
     if [[ $MODO == syncPRmerge ]]; then fusionar_arbol "$RAIZ"; fi

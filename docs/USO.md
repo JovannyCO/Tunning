@@ -120,8 +120,7 @@ git sync "Fix del botón de login"
 El alias invoca la copia de [scripts/git-sync.sh](../scripts/git-sync.sh)
 instalada en `~/.local/bin/git-sync`. Usa Bash, Git y las herramientas
 básicas de Ubuntu. Los modos PR cargan [scripts/git-pr.sh](../scripts/git-pr.sh),
-instalado junto al motor, y requieren `gh`; las auditorías firmadas requieren
-GPG. [scripts/git-json.sh](../scripts/git-json.sh) procesa JSON en Bash y también
+instalado junto al motor, y requieren `gh`. [scripts/git-json.sh](../scripts/git-json.sh) procesa JSON en Bash y también
 se instala junto al motor. Después de actualizar el checkout, ejecuta
 `bash setup.sh --no-packages` para actualizar las copias instaladas.
 
